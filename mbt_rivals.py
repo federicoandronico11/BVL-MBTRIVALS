@@ -1,5 +1,8 @@
 """
-mbt_rivals.py — MBT RIVALS v4.0
+mbt_rivals.py — MBT RIVALS v4.0 — BUILD 2026-02-28
+NESSUN COMMENTO HTML <!-- --> IN QUESTO FILE.
+TUTTI i st.markdown con HTML usano unsafe_allow_html=True.
+Campo battaglia: position:absolute inline su ogni linea, NESSUNA classe court-line.
 OTTIMIZZAZIONI v4.0:
 - Lazy loading carte: paginazione per evitare render di 700+ carte in una volta
 - Cache immagini base64 con @st.cache_data per non rileggere foto ad ogni rerun
