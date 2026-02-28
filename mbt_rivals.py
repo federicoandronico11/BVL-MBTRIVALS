@@ -1183,39 +1183,26 @@ def _render_active_battle(battle_state, rivals_data, cards_db):
     # ── Campo da gioco Beach Volley ──────────────────────────────────────────
     st.markdown("### 🏐 Campo da Gioco")
 
-    st.markdown("""
-    <div class="battle-field-outer">
-      <!-- Sfondo cielo/luci -->
-      <div style="background:linear-gradient(180deg,#03070a 0%,#061520 100%);border-radius:12px;padding:10px;position:relative">
-
-        <!-- Luci ambiente -->
-        <div style="position:absolute;top:0;left:10%;width:80%;height:3px;
-          background:linear-gradient(90deg,transparent,rgba(255,200,50,.35),transparent);border-radius:0 0 50% 50%;"></div>
-
-        <!-- CAMPO SABBIA BEACH VOLLEY -->
-        <div class="beach-court" style="min-height:300px;padding:8px;position:relative;border-radius:10px">
-
-          <!-- Linee campo -->
-          <div class="court-line" style="top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.5)"></div>
-          <div class="court-line" style="bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.5)"></div>
-          <div class="court-line" style="top:0;bottom:0;left:0;width:3px;background:rgba(255,255,255,.5)"></div>
-          <div class="court-line" style="top:0;bottom:0;right:0;width:3px;background:rgba(255,255,255,.5)"></div>
-          <div class="court-line" style="top:0;bottom:0;left:49.5%;width:1px;background:rgba(255,255,255,.3)"></div>
-
-          <!-- RETE -->
-          <div style="position:absolute;top:0;bottom:0;left:48.5%;width:3%;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:stretch">
-            <div style="width:4px;height:100%;background:linear-gradient(180deg,#999,#666 40%,#999);border-radius:2px;animation:netWave 3s ease-in-out infinite;position:relative">
-              <!-- Maglie rete -->
-              <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 8px,rgba(255,255,255,.3) 8px,rgba(255,255,255,.3) 9px),repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(255,255,255,.2) 3px,rgba(255,255,255,.2) 4px)"></div>
-            </div>
-          </div>
-          <!-- Pallina decorativa sulla rete -->
-          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;font-size:1.1rem;animation:ballBounce 2s ease-in-out infinite">🏐</div>
-
-        </div><!-- /beach-court -->
-      </div><!-- /sfondo -->
-    </div><!-- /outer -->
-    """,unsafe_allow_html=True)
+    campo_beach_html = """
+<div style="position:relative; width:100%; background:rgba(0,0,0,0.2); border-radius:15px; padding:10px; min-height:320px; overflow:hidden;">
+    <div style="position:absolute;top:0;left:10%;width:80%;height:3px;
+      background:linear-gradient(90deg,transparent,rgba(255,200,50,.35),transparent);border-radius:0 0 50% 50%;"></div>
+    <div class="beach-court" style="min-height:300px; position:relative; border:2px solid rgba(255,255,255,0.1); border-radius:10px; background: #edc9af22;">
+      <div style="position:absolute; top:0; left:0; right:0; height:3px; background:rgba(255,255,255,.5)"></div>
+      <div style="position:absolute; bottom:0; left:0; right:0; height:3px; background:rgba(255,255,255,.5)"></div>
+      <div style="position:absolute; top:0; bottom:0; left:0; width:3px; background:rgba(255,255,255,.5)"></div>
+      <div style="position:absolute; top:0; bottom:0; right:0; width:3px; background:rgba(255,255,255,.5)"></div>
+      <div style="position:absolute; top:0; bottom:0; left:49.5%; width:1px; background:rgba(255,255,255,.3)"></div>
+      <div style="position:absolute; top:0; bottom:0; left:48.5%; width:3%; z-index:5; display:flex; flex-direction:column; align-items:center;">
+        <div style="width:4px; height:100%; background:linear-gradient(180deg,#999,#666 40%,#999); border-radius:2px; animation:netWave 3s ease-in-out infinite; position:relative">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 8px,rgba(255,255,255,.3) 8px,rgba(255,255,255,.3) 9px);"></div>
+        </div>
+      </div>
+      <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:10; font-size:1.5rem; animation:ballBounce 2s ease-in-out infinite;">🏐</div>
+    </div>
+</div>
+"""
+    st.markdown(campo_beach_html, unsafe_allow_html=True)
 
     # ── Layout due colonne: CPU | Player ──
     col_cpu, col_net_sep, col_player = st.columns([5,1,5])
