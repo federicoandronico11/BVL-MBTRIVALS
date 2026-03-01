@@ -250,15 +250,16 @@ RIVALS_CSS = """
   opacity:1;
 }
 
-/* ── PHOTO ESBORDANTE DAI MARGINI LATERALI ── */
+/* ── PHOTO FULL-WIDTH (DA BORDO A BORDO) ── */
 .mbt-card-photo {
   position: absolute;
-  top: 16;             /* Mantiene l'attacco al bordo superiore */
-  left: -8%;          /* Esborda del 8% a sinistra. Aumenta % per esbordare di più */
-  width: 116%;        /* Larghezza totale 116% (100% della carta + 8% a sx + 8% a dx) */
-  height: 48%;        /* Mantiene l'altezza ridotta come richiesto prima */
+  top: 16%;           /* Mantiene la posizione verticale originale */
+  left: 0;            /* Attaccata al bordo sinistro */
+  transform: none;    /* Rimosso il centramento, non serve più */
+  width: 100%;        /* Copre tutta la larghezza da sinistra a destra */
+  height: 44%;        /* Mantiene l'altezza originale */
   object-fit: cover;  /* Mantiene le proporzioni senza distorcere */
-  border-radius: 15px 15px 0 0; /* Arrotonda gli angoli in alto seguendo la carta */
+  border-radius: 6px; /* Mantiene l'arrotondamento degli angoli originale */
   z-index: 3;
 }
 .mbt-card-photo-placeholder {
