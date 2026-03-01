@@ -254,7 +254,7 @@ RIVALS_CSS = """
 .mbt-card-photo {
   position:absolute;
   top:16%;
-  left:50%;
+  left:0%;
   transform:translateX(-50%);
   width:68%;
   height:44%;
