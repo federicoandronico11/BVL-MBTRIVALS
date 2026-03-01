@@ -253,9 +253,9 @@ RIVALS_CSS = """
 /* ── PHOTO ESBORDANTE DAI MARGINI LATERALI ── */
 .mbt-card-photo {
   position: absolute;
-  top: 0;             /* Mantiene l'attacco al bordo superiore */
-  left: -5%;          /* Esborda del 5% a sinistra. Aumenta % per esbordare di più */
-  width: 110%;        /* Larghezza totale 110% (100% della carta + 5% a sx + 5% a dx) */
+  top: 16;             /* Mantiene l'attacco al bordo superiore */
+  left: -8%;          /* Esborda del 8% a sinistra. Aumenta % per esbordare di più */
+  width: 116%;        /* Larghezza totale 116% (100% della carta + 8% a sx + 8% a dx) */
   height: 48%;        /* Mantiene l'altezza ridotta come richiesto prima */
   object-fit: cover;  /* Mantiene le proporzioni senza distorcere */
   border-radius: 15px 15px 0 0; /* Arrotonda gli angoli in alto seguendo la carta */
