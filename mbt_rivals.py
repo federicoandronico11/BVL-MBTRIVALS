@@ -253,7 +253,7 @@ RIVALS_CSS = """
 /* ── PHOTO MODIFICATA (FULL-WIDTH SUPERIORE) ── */
 .mbt-card-photo {
   position: absolute;
-  top: 0;             /* Attaccata al bordo superiore */
+  top: 12;             /* Attaccata al bordo superiore */
   left: 0;            /* Attaccata al bordo sinistro */
   width: 100%;        /* Copre tutta la larghezza da sinistra a destra */
   height: 60%;        /* Aumentata l'altezza (regola questa % se copre troppo le stats) */
