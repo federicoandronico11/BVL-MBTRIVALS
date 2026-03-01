@@ -13,6 +13,7 @@ import random
 import time
 import base64
 import os
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -251,15 +252,15 @@ RIVALS_CSS = """
 
 /* ── PHOTO ── */
 .mbt-card-photo {
-  position: absolute !important;
-  top: 10% !important;      /* Alza la foto per occupare più spazio sopra */
-  left: 0 !important;       /* Elimina il margine sinistro */
-  width: 100% !important;   /* Espande la foto su tutta la larghezza */
-  height: 55% !important;   /* Aumenta l'altezza per coprire bene l'area */
-  object-fit: cover !important; 
-  object-position: center top; 
-  border-radius: 0 !important; 
-  z-index: 3;
+  position:absolute;
+  top:16%;
+  left:50%;
+  transform:translateX(-50%);
+  width:68%;
+  height:44%;
+  object-fit:cover;
+  border-radius:6px;
+  z-index:3;
 }
 .mbt-card-photo-placeholder {
   position:absolute;
@@ -504,6 +505,26 @@ def save_cards_db(db):
     with open(CARDS_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
 
+def _data_checksum(data: dict) -> str:
+    """Hash veloce per rilevare se i dati sono cambiati."""
+    try:
+        return hashlib.md5(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    except Exception:
+        return ""
+
+def _save_if_dirty(rivals_data: dict, cards_db: dict):
+    """Scrive su disco solo se i dati sono effettivamente cambiati dall'ultimo save."""
+    r_key = "_rivals_cksum"
+    c_key = "_cards_cksum"
+    r_cksum = _data_checksum(rivals_data)
+    c_cksum = _data_checksum(cards_db)
+    if st.session_state.get(r_key) != r_cksum:
+        save_rivals_data(rivals_data)
+        st.session_state[r_key] = r_cksum
+    if st.session_state.get(c_key) != c_cksum:
+        save_cards_db(cards_db)
+        st.session_state[c_key] = c_cksum
+
 def empty_rivals_state():
     return {
         "player_level": 1,
@@ -680,7 +701,9 @@ SUPERPOWERS = [
 
 # ─── CARD BACKGROUND IMAGE HELPER ─────────────────────────────────────────────
 
+@st.cache_data(show_spinner=False)
 def _get_card_bg_b64(tier_name):
+    """Cached: legge il PNG template dal disco UNA SOLA VOLTA per sessione."""
     img_filename = TIER_CARD_IMAGES.get(tier_name, "")
     if not img_filename:
         return None, None
@@ -700,9 +723,9 @@ def _get_card_bg_b64(tier_name):
     return None, None
 
 
+@st.cache_data(show_spinner=False)
 def _load_image_b64_cached(path: str):
-    """Carica un'immagine da path assoluto e restituisce (b64, mime).
-    Usata da mbt_draft.py per le foto atleta nelle carte Limited Edition."""
+    """Cached: carica immagine da path UNA SOLA VOLTA per sessione. Usata da mbt_draft.py."""
     if not path or not os.path.exists(path):
         return None, None
     ext  = path.rsplit(".", 1)[-1].lower()
@@ -716,32 +739,41 @@ def _load_image_b64_cached(path: str):
 
 
 def _is_trainer(card: dict) -> bool:
-    """Restituisce True se la carta è di tipo TRAINER.
-    Usata da mbt_draft.py per distinguere carte trainer dalle normali."""
+    """Restituisce True se la carta è di tipo TRAINER. Usata da mbt_draft.py."""
     return "TRAINER" in str(card.get("ruolo", ""))
 
 
 # ─── ANIMATION OVERLAYS PER TIER ─────────────────────────────────────────────
 
+@st.cache_data(show_spinner=False)
 def _get_card_animation_overlay(tier_name, color, rarity):
-    """Genera gli overlay di animazione appropriati per ogni tier."""
+    """Cached + deterministico: genera overlay animazione UNA SOLA VOLTA.
+    Usa hash invece di random per posizioni particelle stabili."""
+
+    def _h(seed, i, lo, hi):
+        """Genera valore deterministico in range [lo, hi] da seed e indice."""
+        v = int(hashlib.md5("{}{}".format(seed, i).encode()).hexdigest()[:8], 16)
+        return lo + (v % (hi - lo + 1))
+
+    def _hf(seed, i, lo, hi):
+        v = int(hashlib.md5("{}{}f".format(seed, i).encode()).hexdigest()[:8], 16)
+        return lo + (v % 1000) / 1000.0 * (hi - lo)
 
     if tier_name == "ICON GOD":
         particles = ""
         for i in range(8):
-            dx = random.randint(-30, 30)
-            dy = random.randint(-50, -15)
-            delay = random.uniform(0, 2.5)
-            dur = random.uniform(1.2, 2.5)
+            dx = _h("igdx", i, -30, 30)
+            dy = _h("igdy", i, -50, -15)
+            delay = round(_hf("igd", i, 0, 2.5), 2)
+            dur = round(_hf("igdr", i, 1.2, 2.5), 2)
+            top = _h("igt", i, 20, 75)
+            left = _h("igl", i, 10, 90)
             particles += (
                 '<div style="position:absolute;width:3px;height:3px;'
                 'background:linear-gradient(#ff4400,#ffaa00);border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle {dur}s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 6px #ff4400"></div>'
-            ).format(
-                top=random.randint(20,75), left=random.randint(10,90),
-                dur=dur, delay=delay, dx=dx, dy=dy
-            )
+            ).format(top=top, left=left, dur=dur, delay=delay, dx=dx, dy=dy)
         fire = (
             '<div style="position:absolute;bottom:0;left:0;right:0;height:40%;'
             'background:linear-gradient(0deg,rgba(255,40,0,0.55),rgba(255,100,0,0.22),transparent);'
@@ -764,19 +796,18 @@ def _get_card_animation_overlay(tier_name, color, rarity):
     elif tier_name == "ICON TOTY":
         particles = ""
         for i in range(10):
-            dx = random.randint(-30, 30)
-            dy = random.randint(-55, -10)
-            delay = random.uniform(0, 3)
-            dur = random.uniform(1.5, 3)
+            dx = _h("itdx", i, -30, 30)
+            dy = _h("itdy", i, -55, -10)
+            delay = round(_hf("itd", i, 0, 3), 2)
+            dur = round(_hf("itdr", i, 1.5, 3), 2)
+            top = _h("itt", i, 15, 80)
+            left = _h("itl", i, 10, 90)
             particles += (
                 '<div style="position:absolute;width:4px;height:4px;'
                 'background:{color};border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle {dur}s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 8px {color}"></div>'
-            ).format(
-                color=color, top=random.randint(15,80), left=random.randint(10,90),
-                dur=dur, delay=delay, dx=dx, dy=dy
-            )
+            ).format(color=color, top=top, left=left, dur=dur, delay=delay, dx=dx, dy=dy)
         beam = (
             '<div style="position:absolute;inset:-40px;'
             'background:conic-gradient(from 0deg,transparent 0deg,rgba(65,105,225,0.35) 30deg,transparent 60deg,rgba(100,180,255,0.25) 120deg,transparent 150deg);'
@@ -790,19 +821,18 @@ def _get_card_animation_overlay(tier_name, color, rarity):
     elif tier_name == "ICON LEGGENDARIA":
         particles = ""
         for i in range(7):
-            dx = random.randint(-25, 25)
-            dy = random.randint(-45, -8)
-            delay = random.uniform(0, 3.5)
-            dur = random.uniform(2, 4)
+            dx = _h("ildx", i, -25, 25)
+            dy = _h("ildy", i, -45, -8)
+            delay = round(_hf("ild", i, 0, 3.5), 2)
+            dur = round(_hf("ildr", i, 2, 4), 2)
+            top = _h("ilt", i, 20, 75)
+            left = _h("ill", i, 15, 85)
             particles += (
                 '<div style="position:absolute;width:3px;height:3px;'
                 'background:white;border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle {dur}s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 8px white"></div>'
-            ).format(
-                top=random.randint(20,75), left=random.randint(15,85),
-                dur=dur, delay=delay, dx=dx, dy=dy
-            )
+            ).format(top=top, left=left, dur=dur, delay=delay, dx=dx, dy=dy)
         sheen = (
             '<div style="position:absolute;inset:0;'
             'background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,0.14) 50%,transparent 70%);'
@@ -816,19 +846,18 @@ def _get_card_animation_overlay(tier_name, color, rarity):
     elif tier_name == "ICON EPICA":
         particles = ""
         for i in range(6):
-            dx = random.randint(-20, 20)
-            dy = random.randint(-40, -8)
-            delay = random.uniform(0, 3)
-            dur = random.uniform(2, 4)
+            dx = _h("iedx", i, -20, 20)
+            dy = _h("iedy", i, -40, -8)
+            delay = round(_hf("ied", i, 0, 3), 2)
+            dur = round(_hf("iedr", i, 2, 4), 2)
+            top = _h("iet", i, 25, 70)
+            left = _h("iel", i, 15, 85)
             particles += (
                 '<div style="position:absolute;width:3px;height:3px;'
                 'background:{color};border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle {dur}s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 6px {color}"></div>'
-            ).format(
-                color=color, top=random.randint(25,70), left=random.randint(15,85),
-                dur=dur, delay=delay, dx=dx, dy=dy
-            )
+            ).format(color=color, top=top, left=left, dur=dur, delay=delay, dx=dx, dy=dy)
         nebula = (
             '<div style="position:absolute;inset:-30px;'
             'background:conic-gradient(from 0deg,transparent,rgba(180,0,255,0.2),transparent,rgba(100,0,200,0.15),transparent);'
@@ -842,18 +871,17 @@ def _get_card_animation_overlay(tier_name, color, rarity):
     elif tier_name == "ICON BASE":
         particles = ""
         for i in range(5):
-            dx = random.randint(-18, 18)
-            dy = random.randint(-35, -8)
-            delay = random.uniform(0, 2.5)
+            dx = _h("ibdx", i, -18, 18)
+            dy = _h("ibdy", i, -35, -8)
+            delay = round(_hf("ibd", i, 0, 2.5), 2)
+            top = _h("ibt", i, 30, 70)
+            left = _h("ibl", i, 20, 80)
             particles += (
                 '<div style="position:absolute;width:2px;height:2px;'
                 'background:{color};border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle 2.8s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 5px {color}"></div>'
-            ).format(
-                color=color, top=random.randint(30,70), left=random.randint(20,80),
-                delay=delay, dx=dx, dy=dy
-            )
+            ).format(color=color, top=top, left=left, delay=delay, dx=dx, dy=dy)
         nebula = (
             '<div style="position:absolute;width:80px;height:80px;top:-10px;left:-10px;'
             'background:radial-gradient(ellipse at center,rgba(255,215,0,0.25) 0%,transparent 70%);'
@@ -867,19 +895,18 @@ def _get_card_animation_overlay(tier_name, color, rarity):
     elif tier_name == "GOAT":
         particles = ""
         for i in range(6):
-            dx = random.randint(-20, 20)
-            dy = random.randint(-40, -10)
-            delay = random.uniform(0, 2.5)
-            dur = random.uniform(1.8, 3.2)
+            dx = _h("gdx", i, -20, 20)
+            dy = _h("gdy", i, -40, -10)
+            delay = round(_hf("gd", i, 0, 2.5), 2)
+            dur = round(_hf("gdr", i, 1.8, 3.2), 2)
+            top = _h("gt", i, 20, 75)
+            left = _h("gl", i, 10, 90)
             particles += (
                 '<div style="position:absolute;width:3px;height:3px;'
                 'background:{color};border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle {dur}s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8;box-shadow:0 0 6px {color}"></div>'
-            ).format(
-                color=color, top=random.randint(20,75), left=random.randint(10,90),
-                dur=dur, delay=delay, dx=dx, dy=dy
-            )
+            ).format(color=color, top=top, left=left, dur=dur, delay=delay, dx=dx, dy=dy)
         fire_small = (
             '<div style="position:absolute;bottom:0;left:0;right:0;height:28%;'
             'background:linear-gradient(0deg,rgba(255,68,0,0.45),transparent);'
@@ -898,18 +925,17 @@ def _get_card_animation_overlay(tier_name, color, rarity):
         )
         particles = ""
         for i in range(4):
-            dx = random.randint(-15, 15)
-            dy = random.randint(-35, -8)
-            delay = random.uniform(0, 2)
+            dx = _h("tdx", i, -15, 15)
+            dy = _h("tdy", i, -35, -8)
+            delay = round(_hf("td", i, 0, 2), 2)
+            top = _h("tt", i, 25, 70)
+            left = _h("tl", i, 15, 85)
             particles += (
                 '<div style="position:absolute;width:2px;height:2px;'
                 'background:{color};border-radius:50%;'
                 'top:{top}%;left:{left}%;animation:driftParticle 2.5s {delay}s infinite;'
                 '--dx:{dx}px;--dy:{dy}px;z-index:8"></div>'
-            ).format(
-                color=color, top=random.randint(25,70), left=random.randint(15,85),
-                delay=delay, dx=dx, dy=dy
-            )
+            ).format(color=color, top=top, left=left, delay=delay, dx=dx, dy=dy)
         return (
             '<div style="position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden;border-radius:inherit">'
             '{}{}</div>'.format(beam, particles)
@@ -937,7 +963,7 @@ def _get_card_animation_overlay(tier_name, color, rarity):
             '{}</div>'.format(nebula)
         )
 
-    elif rarity >= 5:  # Oro Raro +
+    elif rarity >= 5:
         shimmer = (
             '<div style="position:absolute;top:0;left:-80%;width:40%;height:100%;'
             'background:linear-gradient(105deg,transparent,rgba(255,215,0,0.22),transparent);'
@@ -948,7 +974,7 @@ def _get_card_animation_overlay(tier_name, color, rarity):
             '{}</div>'.format(shimmer)
         )
 
-    elif rarity >= 2:  # Argento +
+    elif rarity >= 2:
         sheen = (
             '<div style="position:absolute;inset:0;'
             'background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,0.07) 50%,transparent 60%);'
@@ -1031,21 +1057,17 @@ def render_card_html(card_data, size="normal", show_special_effects=True):
     tier_color = CARD_TIERS.get(tier_name, {}).get("color", "#ffd700")
     custom_anims = card_data.get("custom_animations", [])
 
-    # PNG corpo carta: usa path custom se esiste, altrimenti tier default
-    card_png_b64, card_png_mime = None, "image/png"
+    # PNG corpo carta: usa path custom (cached) se esiste, altrimenti tier default (cached)
     card_png_path = card_data.get("card_png_path", "")
     if card_png_path and os.path.exists(card_png_path):
-        with open(card_png_path, "rb") as f:
-            card_png_b64 = base64.b64encode(f.read()).decode()
-        ext = card_png_path.rsplit(".", 1)[-1].lower()
-        card_png_mime = {"png":"image/png","webp":"image/webp","jpg":"image/jpeg","jpeg":"image/jpeg"}.get(ext,"image/png")
+        card_png_b64, card_png_mime = _load_card_png_b64(card_png_path)
     else:
         card_png_b64, card_png_mime = _get_card_bg_b64(tier_name)
 
     # Animazioni custom
     custom_css, custom_overlay = ("", "")
     if custom_anims:
-        custom_css, custom_overlay = build_custom_animation_css(custom_anims, card_color=tier_color)
+        custom_css, custom_overlay = build_custom_animation_css(tuple(custom_anims), card_color=tier_color)
 
     return render_card_html_custom(
         card_data,
@@ -1288,6 +1310,11 @@ def _check_level_up(rivals_data):
 
 
 def _sync_ovr_from_tournament(state, cards_db):
+    """Sincronizza OVR dal torneo — eseguita UNA SOLA VOLTA per sessione."""
+    sync_key = "_sync_done_{}".format(id(cards_db))
+    if st.session_state.get(sync_key):
+        return
+    st.session_state[sync_key] = True
     try:
         from data_manager import calcola_overall_fifa
         for atleta in state.get("atleti", []):
@@ -1321,7 +1348,7 @@ def render_mbt_rivals(state):
         cards_db = load_cards_db()
         st.session_state.cards_db = cards_db
 
-    _sync_ovr_from_tournament(state, cards_db)
+    _sync_ovr_from_tournament(state, cards_db)  # run once via session flag
 
     level = rivals_data["player_level"]
     xp = rivals_data["player_xp"]
@@ -1395,8 +1422,8 @@ def render_mbt_rivals(state):
     with tabs[6]:
         _render_admin_tab(state, cards_db, rivals_data)
 
-    save_rivals_data(rivals_data)
-    save_cards_db(cards_db)
+    # Salva solo se i dati sono cambiati (evita I/O ad ogni rerun)
+    _save_if_dirty(rivals_data, cards_db)
 
 
 # ─── BATTLE TAB ───────────────────────────────────────────────────────────────
@@ -1601,69 +1628,171 @@ def _render_active_battle(battle_state, rivals_data, cards_db):
 def _render_collection_tab(rivals_data, cards_db):
     st.markdown("## 🃏 La Mia Collezione")
     all_cards = cards_db.get("cards", [])
-    owned_ids = rivals_data.get("collection", [])
+    owned_ids_set = set(rivals_data.get("collection", []))
     active_team = rivals_data.get("active_team", [])
+    active_trainer = rivals_data.get("active_trainer", "")
 
-    if not owned_ids and all_cards:
+    if not owned_ids_set and all_cards:
         st.info("💡 La tua collezione cresce acquistando pacchetti! Anteprima di tutte le carte disponibili.")
         owned_cards = all_cards
     else:
-        owned_cards = [c for c in all_cards if c.get("id") in owned_ids]
+        owned_cards = [c for c in all_cards if c.get("id") in owned_ids_set]
 
     if not owned_cards:
         st.warning("📦 Nessuna carta! Vai nel **Negozio** per acquistare pacchetti.")
         return
 
-    tier_filter = st.selectbox("🔍 Filtra per Rarità", ["Tutte"] + list(CARD_TIERS.keys()))
-    filtered = owned_cards if tier_filter == "Tutte" else [
-        c for c in owned_cards if get_tier_by_ovr(c.get("overall", 40)) == tier_filter
-    ]
-    st.caption("📊 Totale: {} carte | Mostrate: {}".format(len(owned_cards), len(filtered)))
+    # ── Filtri ──────────────────────────────────────────────────────────────
+    col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+    with col_f1:
+        tier_filter = st.selectbox("🔍 Filtra Rarità", ["Tutte"] + list(CARD_TIERS.keys()), key="coll_tier_f")
+    with col_f2:
+        role_opts = ["Tutti"] + ROLES
+        role_filter = st.selectbox("🎭 Filtra Ruolo", role_opts, key="coll_role_f")
+    with col_f3:
+        search_name = st.text_input("🔎 Cerca", key="coll_search", placeholder="Nome…")
 
-    st.markdown("### 👥 Squadra Attiva (max 5 carte)")
-    st.caption("Seleziona le carte da usare in battaglia:")
-    team_display = all_cards[:5] if len(all_cards) <= 10 else filtered[:5]
-    cols_grid = st.columns(5)
-    for i, card in enumerate(team_display):
-        with cols_grid[i % 5]:
-            card_id = card.get("id", "")
-            is_active = card_id in active_team
-            st.markdown(render_card_html(card, size="small"), unsafe_allow_html=True)
-            if is_active:
-                if st.button("✅ IN SQUADRA", key="rm_team_{}_{}".format(i, card_id[:8]), use_container_width=True):
-                    active_team.remove(card_id)
-                    rivals_data["active_team"] = active_team
+    filtered = owned_cards
+    if tier_filter != "Tutte":
+        filtered = [c for c in filtered if get_tier_by_ovr(c.get("overall", 40)) == tier_filter]
+    if role_filter != "Tutti":
+        filtered = [c for c in filtered if c.get("ruolo", "") == role_filter]
+    if search_name:
+        q = search_name.lower()
+        filtered = [c for c in filtered if q in c.get("nome","").lower() or q in c.get("cognome","").lower()]
+
+    st.caption("📊 Totale collezione: {} | Mostrate: {}".format(len(owned_cards), len(filtered)))
+
+    # ── Squadra Attiva ───────────────────────────────────────────────────────
+    st.markdown("### 👥 Squadra Attiva")
+
+    with st.expander("⚡ Gestisci Giocatori (max 5)", expanded=True):
+        if active_team:
+            st.caption("Squadra attuale — clicca per rimuovere:")
+            team_cards_live = [c for c in all_cards if c.get("id") in active_team]
+            tc_cols = st.columns(min(5, max(1, len(team_cards_live))))
+            for i, card in enumerate(team_cards_live[:5]):
+                with tc_cols[i]:
+                    st.markdown(render_card_html(card, size="small"), unsafe_allow_html=True)
+                    cid = card.get("id", "")
+                    if st.button("❌ Rimuovi", key="rm_at_{}".format(cid[:8]), use_container_width=True):
+                        active_team = [x for x in active_team if x != cid]
+                        rivals_data["active_team"] = active_team
+                        save_rivals_data(rivals_data)
+                        st.rerun()
+        else:
+            st.info("Nessun giocatore in squadra. Aggiungine dalla lista qui sotto.")
+
+    with st.expander("🧑\u200d🏫 Slot TRAINER (1 carta speciale)", expanded=True):
+        trainer_cards = [c for c in owned_cards if _is_trainer(c)]
+        if active_trainer:
+            tr_card = next((c for c in all_cards if c.get("id") == active_trainer), None)
+            if tr_card:
+                tr_col1, tr_col2 = st.columns([1, 3])
+                with tr_col1:
+                    st.markdown(render_card_html(tr_card, size="small"), unsafe_allow_html=True)
+                with tr_col2:
+                    role = tr_card.get("ruolo", "")
+                    desc = ROLE_DESCRIPTIONS.get(role, "")
+                    st.markdown("**{}** {}".format(tr_card.get("nome", ""), tr_card.get("cognome", "")))
+                    st.caption("{} | {}".format(role, desc))
+                    if st.button("❌ Rimuovi Trainer", key="rm_trainer"):
+                        rivals_data["active_trainer"] = ""
+                        save_rivals_data(rivals_data)
+                        st.rerun()
+        else:
+            st.info("Nessun Trainer attivo.")
+            if trainer_cards:
+                tr_opts = ["-- Nessuno --"] + ["{} {} ({})".format(
+                    c.get("nome",""), c.get("cognome",""), c.get("ruolo","")) for c in trainer_cards]
+                sel_tr = st.selectbox("Scegli Trainer", options=tr_opts, key="sel_trainer_dd")
+                if sel_tr != "-- Nessuno --" and st.button("✅ Assegna Trainer", key="assign_trainer"):
+                    idx = ["{} {} ({})".format(c.get("nome",""), c.get("cognome",""), c.get("ruolo",""))
+                           for c in trainer_cards].index(sel_tr)
+                    rivals_data["active_trainer"] = trainer_cards[idx].get("id", "")
+                    save_rivals_data(rivals_data)
                     st.rerun()
             else:
-                disabled = len(active_team) >= 5
-                if st.button("➕ Aggiungi", key="add_team_{}_{}".format(i, card_id[:8]),
-                             disabled=disabled, use_container_width=True):
-                    active_team.append(card_id)
-                    rivals_data["active_team"] = active_team
-                    st.rerun()
+                st.caption("Crea una carta Trainer nell'Admin per usare questo slot.")
 
     st.markdown("---")
+
+    # ── Lista carte con paginazione (gestisce migliaia di carte) ────────────
     st.markdown("### 🗂️ Tutte le Carte")
+
+    PAGE_SIZE = 20
+    page_key = "coll_page"
+    if st.session_state.get("_coll_filter_prev") != (tier_filter, role_filter, search_name):
+        st.session_state[page_key] = 0
+        st.session_state["_coll_filter_prev"] = (tier_filter, role_filter, search_name)
+
+    current_page = st.session_state.get(page_key, 0)
+    total_pages = max(1, (len(filtered) + PAGE_SIZE - 1) // PAGE_SIZE)
+    current_page = min(current_page, total_pages - 1)
+    page_start = current_page * PAGE_SIZE
+    page_cards = filtered[page_start: page_start + PAGE_SIZE]
+
+    if total_pages > 1:
+        pcol1, pcol2, pcol3 = st.columns([1, 2, 1])
+        with pcol1:
+            if st.button("◀ Prec.", disabled=current_page == 0, key="coll_prev"):
+                st.session_state[page_key] = current_page - 1
+                st.rerun()
+        with pcol2:
+            st.markdown(
+                '<div style="text-align:center;font-size:.75rem;color:#888;padding-top:6px">'
+                'Pagina {} / {} ({} carte)</div>'.format(current_page + 1, total_pages, len(filtered)),
+                unsafe_allow_html=True)
+        with pcol3:
+            if st.button("Succ. ▶", disabled=current_page >= total_pages - 1, key="coll_next"):
+                st.session_state[page_key] = current_page + 1
+                st.rerun()
+
     rarity_groups = {}
-    for card in filtered:
+    for card in page_cards:
         tier = get_tier_by_ovr(card.get("overall", 40))
         rarity_groups.setdefault(tier, []).append(card)
 
     for tier_name in reversed(list(CARD_TIERS.keys())):
         if tier_name not in rarity_groups:
             continue
-        tier_cards = rarity_groups[tier_name]
+        tier_cards_pg = rarity_groups[tier_name]
         tier_info = CARD_TIERS[tier_name]
-        with st.expander("{} ({} carte)".format(tier_name, len(tier_cards)),
+        with st.expander("{} ({} carte)".format(tier_name, len(tier_cards_pg)),
                          expanded=tier_info["rarity"] >= 12):
             cols_per_row = 5
-            for i in range(0, len(tier_cards), cols_per_row):
-                chunk = tier_cards[i:i + cols_per_row]
+            for i in range(0, len(tier_cards_pg), cols_per_row):
+                chunk = tier_cards_pg[i:i + cols_per_row]
                 row_cols = st.columns(cols_per_row)
                 for j, card in enumerate(chunk):
                     with row_cols[j]:
                         st.markdown(render_card_html(card, size="small"), unsafe_allow_html=True)
+                        card_id = card.get("id", "")
+                        is_active = card_id in active_team
+                        is_trainer_card = _is_trainer(card)
                         st.caption("OVR {} | {}".format(card.get("overall", 40), card.get("ruolo", "")[:10]))
+                        if is_trainer_card:
+                            if card_id == active_trainer:
+                                st.markdown('<div style="text-align:center;font-size:.55rem;color:#ffd700">🧑‍🏫 TRAINER ATTIVO</div>', unsafe_allow_html=True)
+                            else:
+                                if st.button("🧑‍🏫 Trainer", key="set_tr_{}_{}".format(j, card_id[:8]), use_container_width=True):
+                                    rivals_data["active_trainer"] = card_id
+                                    save_rivals_data(rivals_data)
+                                    st.rerun()
+                        else:
+                            if is_active:
+                                if st.button("✅ Squadra", key="rm2_{}_{}_{}".format(i, j, card_id[:8]), use_container_width=True):
+                                    active_team = [x for x in active_team if x != card_id]
+                                    rivals_data["active_team"] = active_team
+                                    save_rivals_data(rivals_data)
+                                    st.rerun()
+                            else:
+                                if st.button("➕ Aggiungi", key="add2_{}_{}_{}".format(i, j, card_id[:8]),
+                                             disabled=len(active_team) >= 5, use_container_width=True):
+                                    active_team.append(card_id)
+                                    rivals_data["active_team"] = active_team
+                                    save_rivals_data(rivals_data)
+                                    st.rerun()
 
 
 # ─── SHOP TAB ─────────────────────────────────────────────────────────────────
@@ -1941,7 +2070,8 @@ ANIMATION_CATALOG = {
     },
 }
 
-def build_custom_animation_css(anim_ids, card_color="#ffd700"):
+@st.cache_data(show_spinner=False)
+def build_custom_animation_css(anim_ids: tuple, card_color: str = "#ffd700"):
     """Genera CSS/HTML per le animazioni selezionate dall'editor."""
     css_parts = []
     html_layers = []
@@ -2266,7 +2396,7 @@ def render_card_html_custom(card_data, card_png_b64=None, card_png_mime="image/p
     overlay_gradient = "linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.05) 35%,rgba(0,0,0,0.6) 72%,rgba(0,0,0,0.88) 100%)"
     overlay_div = '<div class="mbt-card-overlay" style="background:{};"></div>'.format(overlay_gradient)
 
-    # Foto giocatore: usa b64 diretto se disponibile, altrimenti path
+    # Foto giocatore: usa b64 diretto se disponibile, altrimenti path (cached)
     foto_html = ""
     if foto_b64:
         foto_html = '<img class="mbt-card-photo" src="data:{mime};base64,{b64}" style="opacity:0.9">'.format(
@@ -2274,12 +2404,12 @@ def render_card_html_custom(card_data, card_png_b64=None, card_png_mime="image/p
     else:
         photo_path = card_data.get("foto_path", "")
         if photo_path and os.path.exists(photo_path):
-            with open(photo_path, "rb") as f:
-                b64p = base64.b64encode(f.read()).decode()
-            ext = photo_path.rsplit(".", 1)[-1].lower()
-            mime_p = "image/png" if ext == "png" else "image/jpeg"
-            foto_html = '<img class="mbt-card-photo" src="data:{mime};base64,{b64}" style="opacity:0.9">'.format(
-                mime=mime_p, b64=b64p)
+            b64p, mime_p = _load_image_b64_cached(photo_path)
+            if b64p:
+                foto_html = '<img class="mbt-card-photo" src="data:{mime};base64,{b64}" style="opacity:0.9">'.format(
+                    mime=mime_p, b64=b64p)
+            else:
+                foto_html = '<div class="mbt-card-photo-placeholder">{}</div>'.format(role_icon)
         else:
             foto_html = '<div class="mbt-card-photo-placeholder">{}</div>'.format(role_icon)
 
@@ -2505,7 +2635,7 @@ def _render_card_creator(state, cards_db):
 
     selected_anims_prev = st.session_state.get("cc_selected_anims", [])
     custom_css_prev, custom_overlay_prev = build_custom_animation_css(
-        selected_anims_prev,
+        tuple(selected_anims_prev),
         card_color=tier_color
     )
 
@@ -2597,7 +2727,18 @@ def _render_card_creator(state, cards_db):
             }
             cards_db["cards"].append(new_card)
             save_cards_db(cards_db)
-            st.success("✅ Carta **{} {}** (OVR {} · {} · {} anim.) salvata!".format(
+            # Auto-aggiunge alla collezione del giocatore
+            rd = st.session_state.get("rivals_data", {})
+            if rd:
+                coll = rd.get("collection", [])
+                if new_id not in coll:
+                    coll.append(new_id)
+                    rd["collection"] = coll
+                    save_rivals_data(rd)
+            # Invalida cache immagini per i nuovi path
+            _load_card_png_b64.clear()
+            _load_image_b64_cached.clear()
+            st.success("✅ Carta **{} {}** (OVR {} · {} · {} anim.) salvata e aggiunta alla collezione!".format(
                 nome, cognome, overall, tier_preview,
                 len(new_card["custom_animations"])
             ))
@@ -2606,9 +2747,9 @@ def _render_card_creator(state, cards_db):
             st.rerun()
 
 
-def _load_card_png_b64(card):
-    """Carica il PNG corpo carta come b64 se esiste il path."""
-    card_png_path = card.get("card_png_path", "")
+@st.cache_data(show_spinner=False)
+def _load_card_png_b64(card_png_path: str):
+    """Cached: carica il PNG corpo carta UNA SOLA VOLTA per path."""
     if card_png_path and os.path.exists(card_png_path):
         with open(card_png_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -2623,10 +2764,10 @@ def _render_card_for_display(card, size="small", show_special_effects=True):
     tier_name = get_tier_by_ovr(card.get("overall", 40))
     tier_color = CARD_TIERS.get(tier_name, {}).get("color", "#ffd700")
     custom_anims = card.get("custom_animations", [])
-    card_png_b64, card_png_mime = _load_card_png_b64(card)
+    card_png_b64, card_png_mime = _load_card_png_b64(card.get("card_png_path", ""))
     custom_css, custom_overlay = ("", "")
     if custom_anims:
-        custom_css, custom_overlay = build_custom_animation_css(custom_anims, card_color=tier_color)
+        custom_css, custom_overlay = build_custom_animation_css(tuple(custom_anims), card_color=tier_color)
     return render_card_html_custom(
         card,
         card_png_b64=card_png_b64, card_png_mime=card_png_mime,
