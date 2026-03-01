@@ -688,7 +688,7 @@ def _load_image_b64_cached(path: str):
     """Cached: carica immagine da path UNA SOLA VOLTA per sessione. Usata da mbt_draft.py."""
     if not path or not os.path.exists(path):
         return None, None
-    ext  = path.rsplit(".", 1)[-1].lower()
+    ext = path.rsplit(".", 1)[-1].lower()
     mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
             "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/png")
     try:
@@ -1033,10 +1033,14 @@ def render_card_html(card_data, size="normal", show_special_effects=True):
     tier_color = CARD_TIERS.get(tier_name, {}).get("color", "#ffd700")
     custom_anims = card_data.get("custom_animations", [])
 
-    # PNG corpo carta: usa path custom (cached) se esiste, altrimenti tier default (cached)
+    # PNG corpo carta: usa path custom se esiste, altrimenti tier default
+    card_png_b64, card_png_mime = None, "image/png"
     card_png_path = card_data.get("card_png_path", "")
     if card_png_path and os.path.exists(card_png_path):
-        card_png_b64, card_png_mime = _load_card_png_b64(card_png_path)
+        with open(card_png_path, "rb") as f:
+            card_png_b64 = base64.b64encode(f.read()).decode()
+        ext = card_png_path.rsplit(".", 1)[-1].lower()
+        card_png_mime = {"png":"image/png","webp":"image/webp","jpg":"image/jpeg","jpeg":"image/jpeg"}.get(ext,"image/png")
     else:
         card_png_b64, card_png_mime = _get_card_bg_b64(tier_name)
 
@@ -2610,9 +2614,9 @@ def _render_card_creator(state, cards_db):
             st.rerun()
 
 
-@st.cache_data(show_spinner=False)
-def _load_card_png_b64(card_png_path: str):
-    """Cached: carica il PNG corpo carta UNA SOLA VOLTA per path."""
+def _load_card_png_b64(card):
+    """Carica il PNG corpo carta come b64 se esiste il path."""
+    card_png_path = card.get("card_png_path", "")
     if card_png_path and os.path.exists(card_png_path):
         with open(card_png_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -2627,7 +2631,7 @@ def _render_card_for_display(card, size="small", show_special_effects=True):
     tier_name = get_tier_by_ovr(card.get("overall", 40))
     tier_color = CARD_TIERS.get(tier_name, {}).get("color", "#ffd700")
     custom_anims = card.get("custom_animations", [])
-    card_png_b64, card_png_mime = _load_card_png_b64(card.get("card_png_path", ""))
+    card_png_b64, card_png_mime = _load_card_png_b64(card)
     custom_css, custom_overlay = ("", "")
     if custom_anims:
         custom_css, custom_overlay = build_custom_animation_css(custom_anims, card_color=tier_color)
