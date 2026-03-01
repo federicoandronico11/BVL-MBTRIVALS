@@ -250,17 +250,16 @@ RIVALS_CSS = """
   opacity:1;
 }
 
-/* ── PHOTO ── */
+/* ── PHOTO MODIFICATA (FULL-WIDTH SUPERIORE) ── */
 .mbt-card-photo {
-  position:absolute;
-  top:16%;
-  left:0%;
-  transform:translateX(-50%);
-  width:68%;
-  height:44%;
-  object-fit:cover;
-  border-radius:6px;
-  z-index:3;
+  position: absolute;
+  top: 0;             /* Attaccata al bordo superiore */
+  left: 0;            /* Attaccata al bordo sinistro */
+  width: 100%;        /* Copre tutta la larghezza da sinistra a destra */
+  height: 60%;        /* Aumentata l'altezza (regola questa % se copre troppo le stats) */
+  object-fit: cover;  /* Mantiene le proporzioni ritagliando l'eccesso */
+  border-radius: 15px 15px 0 0; /* Arrotonda solo gli angoli in alto per seguire la carta */
+  z-index: 3;
 }
 .mbt-card-photo-placeholder {
   position:absolute;
