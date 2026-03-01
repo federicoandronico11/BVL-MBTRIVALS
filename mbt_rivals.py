@@ -700,6 +700,27 @@ def _get_card_bg_b64(tier_name):
     return None, None
 
 
+def _load_image_b64_cached(path: str):
+    """Carica un'immagine da path assoluto e restituisce (b64, mime).
+    Usata da mbt_draft.py per le foto atleta nelle carte Limited Edition."""
+    if not path or not os.path.exists(path):
+        return None, None
+    ext  = path.rsplit(".", 1)[-1].lower()
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/png")
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode(), mime
+    except Exception:
+        return None, None
+
+
+def _is_trainer(card: dict) -> bool:
+    """Restituisce True se la carta è di tipo TRAINER.
+    Usata da mbt_draft.py per distinguere carte trainer dalle normali."""
+    return "TRAINER" in str(card.get("ruolo", ""))
+
+
 # ─── ANIMATION OVERLAYS PER TIER ─────────────────────────────────────────────
 
 def _get_card_animation_overlay(tier_name, color, rarity):
