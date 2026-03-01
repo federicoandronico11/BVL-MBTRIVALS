@@ -1656,4 +1656,8 @@ def _render_limited_card_manager(draft_db: dict):
                 save_draft_db(draft_db)
                 st.session_state.draft_db = draft_db
                 st.rerun()
-        st.markdown("<hr style='border-color:#1e1e3a;margin:4px 0'>", unsafe_allow_html=True)
+        st.markdown("""
+                        <div style="{bg}border-radius:8px;padding:8px;text-align:center;cursor:pointer;margin-bottom:4px">
+                          <div style="font-size:.6rem;color:{col}font-weight:{fw}">{nm}</div>
+                        </div>
+                        """.format(bg=bg, col="#ffd700;" if is_sel else "#888;", fw="700" if is_sel else "400", nm=sdata["name"]), unsafe_allow_html=True)
