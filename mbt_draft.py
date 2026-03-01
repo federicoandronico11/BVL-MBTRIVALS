@@ -582,9 +582,8 @@ def _gen_limited_overlay(anim_id: str, color1: str, color2: str, card_id: str) -
     return ""
 
 
-@st.cache_data(show_spinner=False)
-def _build_limited_anim_css(anim_ids: tuple) -> str:
-    """Raccoglie i keyframes CSS per le animazioni selezionate. Cached."""
+def _build_limited_anim_css(anim_ids: list) -> str:
+    """Raccoglie i keyframes CSS per le animazioni selezionate."""
     css = ""
     for aid in anim_ids:
         if aid in LIMITED_ANIMATIONS:
@@ -633,21 +632,13 @@ def render_limited_card_html(card_data, size="normal", show_effects=True):
     anim_css = ""
     anim_overlays = ""
     if show_effects and anim_ids:
-        anim_css = _build_limited_anim_css(tuple(anim_ids))
+        anim_css = _build_limited_anim_css(anim_ids)
         for aid in anim_ids:
             anim_overlays += _gen_limited_overlay(aid, color, color2, card_id)
 
-    # Background: PNG corpo carta custom > gradient custom > tier default
-    card_png_path = card_data.get("card_png_path", "")
+    # Background
     custom_bg = card_data.get("custom_bg_gradient", "")
-    if card_png_path and os.path.exists(card_png_path):
-        from mbt_rivals import _load_card_png_b64
-        cp_b64, cp_mime = _load_card_png_b64(card_png_path)
-        if cp_b64:
-            bg_style = "background-image:url('data:{};base64,{}');background-size:cover;background-position:center top;".format(cp_mime, cp_b64)
-        else:
-            bg_style = "background:linear-gradient(160deg,{c}33,{c}66,{c}33);".format(c=color)
-    elif custom_bg:
+    if custom_bg:
         bg_style = "background:{};".format(custom_bg)
     else:
         bg_b64, bg_mime = _get_card_bg_b64(tier_name)
@@ -1408,7 +1399,7 @@ def _render_limited_card_creator(draft_db: dict):
             ltd_tier_color = CARD_TIERS.get(ltd_tier, {}).get("color", "#ffd700")
             st.markdown('<div style="font-family:Orbitron,sans-serif;font-size:.85rem;color:{};font-weight:700">OVR: {} | {}</div>'.format(ltd_tier_color, ltd_ovr, ltd_tier), unsafe_allow_html=True)
 
-        # ── Upload foto & PNG corpo carta ──
+        # ── Upload foto ──
         with st.expander("📷 Foto & Personalizzazione Visiva", expanded=True):
             ltd_foto_file = st.file_uploader("Foto Giocatore", type=["png", "jpg", "jpeg"], key="ltd_foto")
             ltd_foto_path = ""
@@ -1421,25 +1412,6 @@ def _render_limited_card_creator(draft_db: dict):
                 with open(ltd_foto_path, "wb") as f:
                     f.write(ltd_foto_file.read())
                 st.success("✅ Foto salvata")
-
-            # ── Nuovo: PNG corpo carta ──
-            ltd_card_png_file = st.file_uploader(
-                "🃏 PNG Corpo Carta (opzionale — sostituisce il background tier)",
-                type=["png", "webp", "jpg", "jpeg"], key="ltd_card_png"
-            )
-            ltd_card_png_path = ""
-            if ltd_card_png_file:
-                from mbt_rivals import ASSETS_CARDS_DIR
-                os.makedirs(ASSETS_CARDS_DIR, exist_ok=True)
-                ext_cp = ltd_card_png_file.name.rsplit(".", 1)[-1].lower()
-                ltd_card_png_path = os.path.join(
-                    ASSETS_CARDS_DIR,
-                    "ltd_body_{}_{}_{}.{}".format(ltd_nome or "ltd", ltd_cog or "card", random.randint(1000, 9999), ext_cp)
-                )
-                with open(ltd_card_png_path, "wb") as f:
-                    f.write(ltd_card_png_file.read())
-                st.image(ltd_card_png_file, caption="Preview corpo carta", width=140)
-                st.success("✅ PNG corpo carta salvato")
 
             col_col1, col_col2 = st.columns(2)
             with col_col1:
@@ -1475,9 +1447,9 @@ def _render_limited_card_creator(draft_db: dict):
                         bg = "background:rgba(255,215,0,.15);border:2px solid #ffd700;" if is_sel else "background:#1a1a2a;border:1px solid #333;"
                         st.markdown("""
                         <div style="{bg}border-radius:8px;padding:8px;text-align:center;cursor:pointer;margin-bottom:4px">
-                          <div style="font-size:.6rem;color:{}font-weight:{}">{}</div>
+                          <div style="font-size:.6rem;color:{col}font-weight:{fw}">{nm}</div>
                         </div>
-                        """.format("#ffd700;" if is_sel else "#888;", "700" if is_sel else "400", sdata["name"]), unsafe_allow_html=True)
+                        """.format(bg=bg, col="#ffd700;" if is_sel else "#888;", fw="700" if is_sel else "400", nm=sdata["name"]), unsafe_allow_html=True)
                         if st.button("✓" if is_sel else sdata["name"][:8], key="shape_sel_{}_{}".format(grp_name, sid), use_container_width=True):
                             st.session_state.ltd_selected_shape = sid
                             st.rerun()
@@ -1578,7 +1550,6 @@ def _render_limited_card_creator(draft_db: dict):
                 "attacco": ltd_atk, "difesa": ltd_dif, "battuta": ltd_bat,
                 "muro": ltd_mur, "ricezione": ltd_ric, "alzata": ltd_alz,
                 "foto_path": ltd_foto_path,
-                "card_png_path": ltd_card_png_path,
                 "custom_color1": ltd_color1,
                 "custom_color2": ltd_color2,
                 "card_shape": st.session_state.get("ltd_selected_shape", "classic"),
@@ -1594,19 +1565,6 @@ def _render_limited_card_creator(draft_db: dict):
             draft_db["cards"].append(new_ltd)
             draft_db["next_id"] += 1
             save_draft_db(draft_db)
-            # Auto-aggiunge alla collezione del giocatore
-            from mbt_rivals import save_rivals_data, _load_card_png_b64, _load_image_b64_cached
-            rd = st.session_state.get("rivals_data", {})
-            if rd:
-                coll = rd.get("collection", [])
-                lid = new_ltd["id"]
-                if lid not in coll:
-                    coll.append(lid)
-                    rd["collection"] = coll
-                    save_rivals_data(rd)
-            # Invalida cache immagini per nuovi path
-            _load_card_png_b64.clear()
-            _load_image_b64_cached.clear()
             st.session_state.draft_db = draft_db
             st.session_state.ltd_sel_anims = []
             st.session_state.ltd_selected_shape = "classic"
@@ -1656,8 +1614,4 @@ def _render_limited_card_manager(draft_db: dict):
                 save_draft_db(draft_db)
                 st.session_state.draft_db = draft_db
                 st.rerun()
-        st.markdown("""
-                        <div style="{bg}border-radius:8px;padding:8px;text-align:center;cursor:pointer;margin-bottom:4px">
-                          <div style="font-size:.6rem;color:{col}font-weight:{fw}">{nm}</div>
-                        </div>
-                        """.format(bg=bg, col="#ffd700;" if is_sel else "#888;", fw="700" if is_sel else "400", nm=sdata["name"]), unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#1e1e3a;margin:4px 0'>", unsafe_allow_html=True)
