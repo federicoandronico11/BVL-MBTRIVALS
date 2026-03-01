@@ -89,80 +89,138 @@ CARD_SHAPES = {
         "clip": "none", "border_radius": "50% 50% 14px 14px / 30% 30% 14px 14px",
         "extra_css": "",
     },
+    "pill": {
+        "name": "Pillola", "group": "Standard",
+        "clip": "none", "border_radius": "80px",
+        "extra_css": "",
+    },
+    "soft_square": {
+        "name": "Quadrato Soft", "group": "Standard",
+        "clip": "none", "border_radius": "8px",
+        "extra_css": "",
+    },
+    "asymmetric": {
+        "name": "Asimmetrica", "group": "Standard",
+        "clip": "none", "border_radius": "24px 4px 24px 4px",
+        "extra_css": "",
+    },
+    # ── Geometric ──
     "hex": {
-        "name": "Hexagon", "group": "Geometric",
+        "name": "Hexagon", "group": "Geometrico",
         "clip": "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
         "border_radius": "0",
         "extra_css": "",
     },
     "diamond": {
-        "name": "Diamond", "group": "Geometric",
+        "name": "Diamond", "group": "Geometrico",
         "clip": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
         "border_radius": "0",
         "extra_css": "",
     },
     "pentagon": {
-        "name": "Pentagon", "group": "Geometric",
+        "name": "Pentagon", "group": "Geometrico",
         "clip": "polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)",
         "border_radius": "0",
         "extra_css": "",
     },
     "octagon": {
-        "name": "Octagon", "group": "Geometric",
+        "name": "Octagon", "group": "Geometrico",
         "clip": "polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)",
         "border_radius": "0",
         "extra_css": "",
     },
     "shield": {
-        "name": "Shield", "group": "Geometric",
+        "name": "Shield", "group": "Geometrico",
         "clip": "polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)",
         "border_radius": "0",
         "extra_css": "",
     },
     "arrow_up": {
-        "name": "Arrow Up", "group": "Geometric",
+        "name": "Arrow Up", "group": "Geometrico",
         "clip": "polygon(50% 0%, 100% 40%, 80% 40%, 80% 100%, 20% 100%, 20% 40%, 0% 40%)",
         "border_radius": "0",
         "extra_css": "",
     },
-    # ── Torn / Exploded ──
+    "parallelogram": {
+        "name": "Parallelogramma", "group": "Geometrico",
+        "clip": "polygon(15% 0%, 100% 0%, 85% 100%, 0% 100%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "triangle_top": {
+        "name": "Triangolo Su", "group": "Geometrico",
+        "clip": "polygon(50% 0%, 100% 100%, 0% 100%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "chevron": {
+        "name": "Chevron", "group": "Geometrico",
+        "clip": "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%, 10% 50%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "heptagon": {
+        "name": "Ettagono", "group": "Geometrico",
+        "clip": "polygon(50% 0%, 90% 18%, 100% 60%, 76% 100%, 24% 100%, 0% 60%, 10% 18%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "nonagon": {
+        "name": "Nonagono", "group": "Geometrico",
+        "clip": "polygon(50% 0%,83% 12%,100% 43%,94% 78%,68% 100%,32% 100%,6% 78%,0% 43%,17% 12%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    # ── Esplose / Torn ──
     "exploded_tr": {
-        "name": "Esplosa (angolo alto dx)", "group": "Esplose",
+        "name": "Esplosa Dx Alto", "group": "Esplose",
         "clip": "polygon(0% 0%, 72% 0%, 85% 8%, 100% 0%, 100% 100%, 0% 100%)",
         "border_radius": "4px",
         "extra_css": "filter:drop-shadow(4px -4px 6px rgba(255,100,0,.7))",
     },
     "exploded_tl": {
-        "name": "Esplosa (angolo alto sx)", "group": "Esplose",
+        "name": "Esplosa Sx Alto", "group": "Esplose",
         "clip": "polygon(0% 0%, 15% 8%, 28% 0%, 100% 0%, 100% 100%, 0% 100%)",
         "border_radius": "4px",
         "extra_css": "filter:drop-shadow(-4px -4px 6px rgba(255,100,0,.7))",
     },
     "shatter_corner": {
-        "name": "Frantumata (angolo)", "group": "Esplose",
+        "name": "Frantumata", "group": "Esplose",
         "clip": "polygon(0% 0%, 60% 0%, 65% 5%, 75% 2%, 80% 8%, 100% 0%, 100% 100%, 0% 100%)",
         "border_radius": "0",
         "extra_css": "filter:drop-shadow(3px -3px 8px rgba(255,200,0,.8))",
     },
     "debris_right": {
-        "name": "Detriti destra", "group": "Esplose",
+        "name": "Detriti Destra", "group": "Esplose",
         "clip": "polygon(0% 0%, 100% 0%, 92% 15%, 100% 25%, 95% 40%, 100% 55%, 97% 70%, 100% 100%, 0% 100%)",
         "border_radius": "4px 0 4px 4px",
         "extra_css": "filter:drop-shadow(6px 0px 10px rgba(255,150,0,.6))",
     },
     "torn_bottom": {
-        "name": "Strappata in basso", "group": "Esplose",
+        "name": "Strappata Basso", "group": "Esplose",
         "clip": "polygon(0% 0%, 100% 0%, 100% 82%, 90% 88%, 80% 83%, 70% 90%, 60% 84%, 50% 92%, 40% 85%, 30% 91%, 20% 84%, 10% 89%, 0% 83%)",
         "border_radius": "8px 8px 0 0",
         "extra_css": "filter:drop-shadow(0px 6px 10px rgba(255,80,0,.5))",
     },
     "crack_center": {
-        "name": "Incrinata al centro", "group": "Esplose",
+        "name": "Incrinata Centro", "group": "Esplose",
         "clip": "polygon(0% 0%, 46% 0%, 47% 45%, 53% 50%, 54% 0%, 100% 0%, 100% 100%, 54% 100%, 53% 55%, 47% 50%, 46% 100%, 0% 100%)",
         "border_radius": "8px",
         "extra_css": "filter:drop-shadow(0 0 12px rgba(255,50,50,.7))",
     },
-    # ── Futuristic ──
+    "meteor": {
+        "name": "Meteora", "group": "Esplose",
+        "clip": "polygon(0% 0%, 80% 0%, 100% 20%, 100% 100%, 20% 100%, 0% 80%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(4px 4px 10px rgba(255,120,0,.7))",
+    },
+    "explosion_all": {
+        "name": "Esplosione 360", "group": "Esplose",
+        "clip": "polygon(50% 0%,55% 35%,65% 15%,60% 40%,80% 25%,65% 45%,100% 45%,75% 55%,95% 70%,70% 60%,80% 88%,58% 68%,50% 100%,42% 68%,20% 88%,30% 60%,5% 70%,25% 55%,0% 45%,35% 45%,20% 25%,40% 40%,35% 15%,45% 35%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 18px rgba(255,80,0,.9))",
+    },
+    # ── Futuristico ──
     "cyber_cut": {
         "name": "Cyber Cut", "group": "Futuristico",
         "clip": "polygon(0% 0%, 85% 0%, 100% 15%, 100% 100%, 15% 100%, 0% 85%)",
@@ -211,7 +269,31 @@ CARD_SHAPES = {
         "border_radius": "0",
         "extra_css": "",
     },
-    # ── Organic / Natural ──
+    "razor": {
+        "name": "Rasoio", "group": "Futuristico",
+        "clip": "polygon(0% 0%, 100% 0%, 100% 90%, 50% 100%, 0% 90%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "boomerang": {
+        "name": "Boomerang", "group": "Futuristico",
+        "clip": "polygon(0% 0%, 100% 15%, 85% 100%, 0% 85%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "stealth": {
+        "name": "Stealth", "group": "Futuristico",
+        "clip": "polygon(50% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "double_cut": {
+        "name": "Double Cut", "group": "Futuristico",
+        "clip": "polygon(15% 0%, 85% 0%, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0% 85%, 0% 15%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    # ── Organico / Naturale ──
     "wave_right": {
         "name": "Wave Right", "group": "Organico",
         "clip": "polygon(0% 0%, 88% 0%, 100% 10%, 95% 30%, 100% 50%, 95% 70%, 100% 90%, 88% 100%, 0% 100%)",
@@ -242,7 +324,31 @@ CARD_SHAPES = {
         "border_radius": "50% 0",
         "extra_css": "",
     },
-    # ── Aura / Glow shapes ──
+    "raindrop": {
+        "name": "Goccia", "group": "Organico",
+        "clip": "polygon(50% 0%, 100% 50%, 85% 85%, 50% 100%, 15% 85%, 0% 50%)",
+        "border_radius": "50% 50% 50% 50% / 0% 0% 50% 50%",
+        "extra_css": "",
+    },
+    "butterfly": {
+        "name": "Farfalla", "group": "Organico",
+        "clip": "polygon(0% 20%, 40% 0%, 50% 30%, 60% 0%, 100% 20%, 80% 50%, 100% 80%, 60% 100%, 50% 70%, 40% 100%, 0% 80%, 20% 50%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    "mountain": {
+        "name": "Montagna", "group": "Organico",
+        "clip": "polygon(0% 100%, 20% 60%, 35% 75%, 50% 30%, 65% 75%, 80% 60%, 100% 100%)",
+        "border_radius": "0 0 8px 8px",
+        "extra_css": "",
+    },
+    "wave_double": {
+        "name": "Doppia Onda", "group": "Organico",
+        "clip": "polygon(0% 10%, 8% 0%, 16% 10%, 24% 0%, 32% 10%, 40% 0%, 48% 10%, 56% 0%, 64% 10%, 72% 0%, 80% 10%, 88% 0%, 96% 10%, 100% 5%, 100% 90%, 96% 100%, 88% 90%, 80% 100%, 72% 90%, 64% 100%, 56% 90%, 48% 100%, 40% 90%, 32% 100%, 24% 90%, 16% 100%, 8% 90%, 0% 100%)",
+        "border_radius": "0",
+        "extra_css": "",
+    },
+    # ── Speciale / Aura ──
     "star_5": {
         "name": "Stella 5 punte", "group": "Speciale",
         "clip": "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
@@ -255,8 +361,14 @@ CARD_SHAPES = {
         "border_radius": "0",
         "extra_css": "filter:drop-shadow(0 0 16px rgba(255,215,0,.8))",
     },
+    "star_8": {
+        "name": "Stella 8 punte", "group": "Speciale",
+        "clip": "polygon(50% 0%,58% 35%,79% 21%,65% 42%,100% 50%,65% 58%,79% 79%,58% 65%,50% 100%,42% 65%,21% 79%,35% 58%,0% 50%,35% 42%,21% 21%,42% 35%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 20px rgba(255,215,0,.9))",
+    },
     "burst": {
-        "name": "Burst", "group": "Speciale",
+        "name": "Burst 16p", "group": "Speciale",
         "clip": "polygon(50% 0%, 55% 35%, 80% 10%, 65% 40%, 100% 35%, 70% 50%, 100% 65%, 65% 60%, 80% 90%, 55% 65%, 50% 100%, 45% 65%, 20% 90%, 35% 60%, 0% 65%, 30% 50%, 0% 35%, 35% 40%, 20% 10%, 45% 35%)",
         "border_radius": "0",
         "extra_css": "filter:drop-shadow(0 0 20px rgba(255,200,0,.9))",
@@ -279,7 +391,19 @@ CARD_SHAPES = {
         "border_radius": "0",
         "extra_css": "",
     },
-    # ── Distorted ──
+    "sun_rays": {
+        "name": "Raggi Solari", "group": "Speciale",
+        "clip": "polygon(50% 0%,53% 30%,60% 10%,58% 35%,70% 18%,62% 40%,80% 30%,67% 46%,88% 44%,70% 54%,90% 60%,72% 62%,85% 76%,68% 70%,74% 88%,58% 76%,56% 96%,50% 80%,44% 96%,42% 76%,26% 88%,32% 70%,15% 76%,28% 62%,10% 60%,30% 54%,12% 44%,33% 46%,20% 30%,38% 40%,30% 18%,42% 35%,40% 10%,47% 30%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 22px rgba(255,220,0,1))",
+    },
+    "heart": {
+        "name": "Cuore", "group": "Speciale",
+        "clip": "polygon(50% 30%, 85% 0%, 100% 25%, 100% 55%, 50% 100%, 0% 55%, 0% 25%, 15% 0%)",
+        "border_radius": "50% 50% 0 0",
+        "extra_css": "filter:drop-shadow(0 0 14px rgba(255,50,100,.8))",
+    },
+    # ── Glitch / Digitale ──
     "glitch_h": {
         "name": "Glitch Orizzontale", "group": "Glitch",
         "clip": "polygon(0% 0%, 102% 0%, 100% 32%, 103% 33%, 100% 34%, 102% 65%, 100% 66%, 102% 67%, 100% 100%, -2% 100%, 0% 67%, -3% 66%, 0% 65%, -2% 33%, 0% 32%)",
@@ -302,7 +426,19 @@ CARD_SHAPES = {
         "clip": "none", "border_radius": "0",
         "extra_css": "image-rendering:pixelated",
     },
-    # ── Premium / Luxury ──
+    "broken_grid": {
+        "name": "Griglia Rotta", "group": "Glitch",
+        "clip": "polygon(0% 0%, 40% 0%, 40% 5%, 60% 5%, 60% 0%, 100% 0%, 100% 40%, 95% 40%, 95% 60%, 100% 60%, 100% 100%, 60% 100%, 60% 95%, 40% 95%, 40% 100%, 0% 100%, 0% 60%, 5% 60%, 5% 40%, 0% 40%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 8px rgba(0,255,255,.5))",
+    },
+    "circuit": {
+        "name": "Circuito", "group": "Glitch",
+        "clip": "polygon(0% 20%, 10% 20%, 10% 10%, 30% 10%, 30% 0%, 70% 0%, 70% 10%, 90% 10%, 90% 20%, 100% 20%, 100% 80%, 90% 80%, 90% 90%, 70% 90%, 70% 100%, 30% 100%, 30% 90%, 10% 90%, 10% 80%, 0% 80%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 10px rgba(0,255,150,.6))",
+    },
+    # ── Premium / Lusso ──
     "oval": {
         "name": "Ovale", "group": "Premium",
         "clip": "ellipse(48% 50% at 50% 50%)",
@@ -336,6 +472,24 @@ CARD_SHAPES = {
         "border_radius": "0 0 8px 8px",
         "extra_css": "filter:drop-shadow(0 0 14px rgba(255,215,0,.9))",
     },
+    "arch": {
+        "name": "Arco", "group": "Premium",
+        "clip": "polygon(0% 100%, 0% 50%, 10% 20%, 30% 5%, 50% 0%, 70% 5%, 90% 20%, 100% 50%, 100% 100%)",
+        "border_radius": "0 0 8px 8px",
+        "extra_css": "",
+    },
+    "gem": {
+        "name": "Gemma", "group": "Premium",
+        "clip": "polygon(30% 0%, 70% 0%, 100% 30%, 100% 60%, 70% 100%, 30% 100%, 0% 60%, 0% 30%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 20px rgba(180,100,255,.9))",
+    },
+    "diamond_cut": {
+        "name": "Taglio Diamante", "group": "Premium",
+        "clip": "polygon(50% 0%, 65% 20%, 100% 20%, 80% 50%, 90% 100%, 50% 75%, 10% 100%, 20% 50%, 0% 20%, 35% 20%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 18px rgba(150,220,255,.9))",
+    },
     # ── Sport ──
     "volleyball": {
         "name": "Pallone Volley", "group": "Sport",
@@ -354,6 +508,17 @@ CARD_SHAPES = {
         "clip": "polygon(20% 0%, 30% 10%, 50% 5%, 70% 10%, 80% 0%, 100% 15%, 85% 25%, 85% 100%, 15% 100%, 15% 25%, 0% 15%)",
         "border_radius": "0",
         "extra_css": "",
+    },
+    "medal": {
+        "name": "Medaglia", "group": "Sport",
+        "clip": "polygon(38% 0%, 62% 0%, 70% 5%, 100% 25%, 100% 65%, 80% 90%, 50% 100%, 20% 90%, 0% 65%, 0% 25%, 30% 5%)",
+        "border_radius": "0",
+        "extra_css": "filter:drop-shadow(0 0 12px rgba(255,215,0,.8))",
+    },
+    "scoreboard": {
+        "name": "Tabellone", "group": "Sport",
+        "clip": "none", "border_radius": "4px 4px 16px 16px",
+        "extra_css": "border-top:6px solid currentColor",
     },
 }
 
@@ -1432,30 +1597,49 @@ def _render_limited_card_creator(draft_db: dict):
                     value="linear-gradient(160deg,#1a0030,#4a0080,#1a0030)", key="ltd_bg_grad_val")
 
         # ── Scelta forma ──
-        with st.expander("🃏 Forma della Carta — Galleria 50 Stili", expanded=False):
+        with st.expander("🃏 Forma della Carta — Galleria {} Stili".format(len(CARD_SHAPES)), expanded=False):
             groups = {}
             for sid, sdata in CARD_SHAPES.items():
                 g = sdata.get("group", "Altro")
                 groups.setdefault(g, []).append((sid, sdata))
 
             for grp_name, grp_shapes in groups.items():
-                st.markdown("**{}**".format(grp_name))
-                gcols = st.columns(min(5, len(grp_shapes)))
+                st.markdown("**{} — {} forme**".format(grp_name, len(grp_shapes)))
+                n_cols = min(5, len(grp_shapes))
+                gcols = st.columns(n_cols)
                 for gi, (sid, sdata) in enumerate(grp_shapes):
-                    with gcols[gi % 5]:
+                    with gcols[gi % n_cols]:
                         is_sel = st.session_state.get("ltd_selected_shape") == sid
-                        bg = "background:rgba(255,215,0,.15);border:2px solid #ffd700;" if is_sel else "background:#1a1a2a;border:1px solid #333;"
-                        st.markdown("""
-                        <div style="{bg}border-radius:8px;padding:8px;text-align:center;cursor:pointer;margin-bottom:4px">
-                          <div style="font-size:.6rem;color:{}font-weight:{}">{}</div>
-                        </div>
-                        """.format("#ffd700;" if is_sel else "#888;", "700" if is_sel else "400", sdata["name"]), unsafe_allow_html=True)
-                        if st.button("✓" if is_sel else sdata["name"][:8], key="shape_sel_{}_{}".format(grp_name, sid), use_container_width=True):
+                        # FIX: usa concatenazione invece di .format() per evitare KeyError
+                        # causato dal mix di {} anonimi e {named} nella stessa stringa
+                        if is_sel:
+                            card_style = "background:rgba(255,215,0,.18);border:2px solid #ffd700;"
+                            txt_color = "#ffd700"
+                            txt_weight = "700"
+                        else:
+                            card_style = "background:#12121e;border:1px solid #2a2a3a;"
+                            txt_color = "#888"
+                            txt_weight = "400"
+                        shape_html = (
+                            '<div style="' + card_style + 'border-radius:8px;padding:6px 4px;'
+                            'text-align:center;cursor:pointer;margin-bottom:4px;min-height:36px;'
+                            'display:flex;align-items:center;justify-content:center;">'
+                            '<div style="font-size:.55rem;color:' + txt_color + ';'
+                            'font-weight:' + txt_weight + ';line-height:1.2">'
+                            + sdata["name"] +
+                            '</div></div>'
+                        )
+                        st.markdown(shape_html, unsafe_allow_html=True)
+                        btn_lbl = "✓ " + sdata["name"][:7] if is_sel else sdata["name"][:9]
+                        if st.button(btn_lbl, key="shape_sel_{}_{}".format(grp_name, sid), use_container_width=True):
                             st.session_state.ltd_selected_shape = sid
                             st.rerun()
+                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
             selected_shape = st.session_state.get("ltd_selected_shape", "classic")
-            st.info("📐 Forma selezionata: **{}**".format(CARD_SHAPES.get(selected_shape, {}).get("name", "Classic")))
+            sel_name = CARD_SHAPES.get(selected_shape, {}).get("name", "Classic")
+            sel_group = CARD_SHAPES.get(selected_shape, {}).get("group", "")
+            st.success("📐 Forma selezionata: **{}** — gruppo {}".format(sel_name, sel_group))
 
         # ── Selezione animazioni ──
         with st.expander("✨ Animazioni Speciali (10 effetti)", expanded=False):
@@ -1473,12 +1657,19 @@ def _render_limited_card_creator(draft_db: dict):
                 for ai, (aid, adata) in enumerate(grp_anims):
                     with acols[ai % 3]:
                         is_active = aid in st.session_state.ltd_sel_anims
-                        bg = "background:rgba(255,215,0,.12);border:2px solid #ffd700;" if is_active else "background:#0a0a15;border:1px solid #1e1e3a;"
-                        st.markdown("""
-                        <div style="{}border-radius:8px;padding:8px;margin-bottom:4px">
-                          <div style="font-size:.65rem;font-weight:700;color:{}">{}</div>
-                        </div>
-                        """.format(bg, "#ffd700" if is_active else "#888", adata["name"]), unsafe_allow_html=True)
+                        if is_active:
+                            anim_card_style = "background:rgba(255,215,0,.12);border:2px solid #ffd700;"
+                            anim_txt_color = "#ffd700"
+                        else:
+                            anim_card_style = "background:#0a0a15;border:1px solid #1e1e3a;"
+                            anim_txt_color = "#888"
+                        anim_html = (
+                            '<div style="' + anim_card_style + 'border-radius:8px;padding:8px;margin-bottom:4px">'
+                            '<div style="font-size:.65rem;font-weight:700;color:' + anim_txt_color + '">'
+                            + adata["name"] +
+                            '</div></div>'
+                        )
+                        st.markdown(anim_html, unsafe_allow_html=True)
                         lbl = "✅ Rimuovi" if is_active else "➕ Aggiungi"
                         if st.button(lbl, key="ltd_anim_{}_{}".format(grp_name, aid), use_container_width=True):
                             if is_active:
