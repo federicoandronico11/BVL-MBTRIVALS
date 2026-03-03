@@ -1,6 +1,6 @@
 """
-app.py — Beach Volley Tournament Manager Pro v4
-Sistema ruoli: Admin (accesso completo) | Ospite (sola lettura)
+app.py — MBT-BVL 2.0 (Master Ball Academy Beach Volleyball League)
+Sistema ruoli: Admin (accesso completo) | Atleta Registrato | Ospite (sola lettura)
 """
 import streamlit as st
 import hashlib
@@ -13,7 +13,7 @@ from theme_manager import (
 from ranking_page import build_ranking_data, _render_schede_atleti, CARD_ANIMATIONS, _render_global_trophy_board
 
 st.set_page_config(
-    page_title="🏐 Beach Volley Tournament",
+    page_title="🏐 MBT-BVL 2.0",
     page_icon="🏐",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -33,61 +33,78 @@ def _hash(pw: str) -> str:
 def _is_admin() -> bool:
     return st.session_state.get("user_role") == "admin"
 
+def _is_atleta() -> bool:
+    """True se loggato come atleta registrato."""
+    return st.session_state.get("user_role") == "atleta"
+
 def _render_login():
-    """Schermata di login. Chiama st.stop() se non ancora autenticato."""
+    """Schermata di login con 3 tab: Admin, Atleta registrato, Ospite."""
     if "user_role" in st.session_state:
         return  # già loggato
+
+    # Mostra form registrazione se richiesto
+    if st.session_state.get("show_registrazione"):
+        _state_tmp = load_state()
+        from auth_manager import render_registrazione
+        render_registrazione(_state_tmp)
+        if "state" in st.session_state:
+            save_state(st.session_state.state)
+        return
 
     st.markdown("""
     <style>
     [data-testid="stSidebar"] { display: none !important; }
-    .block-container { max-width: 480px !important; padding-top: 60px !important; }
-    .login-card {
-        background: #13131a;
-        border: 2px solid #e8002d;
-        border-radius: 18px;
-        padding: 44px 40px 36px;
-        box-shadow: 0 12px 60px rgba(232,0,45,0.20), 0 2px 8px rgba(0,0,0,0.5);
-    }
-    .login-logo  { text-align:center; font-size:3.5rem; line-height:1; margin-bottom:10px; }
-    .login-title {
-        font-family: 'Barlow Condensed', 'Oswald', sans-serif;
-        font-size: 1.9rem; font-weight: 900;
-        text-transform: uppercase; letter-spacing: 4px;
-        text-align: center; color: #ffffff; margin-bottom: 2px;
-    }
-    .login-sub {
-        text-align: center; color: #888;
-        font-size: 0.68rem; letter-spacing: 3px;
-        text-transform: uppercase; margin-bottom: 32px;
-    }
+    .block-container { max-width: 520px !important; padding-top: 48px !important; }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="login-card">
-        <div class="login-logo">🏐</div>
-        <div class="login-title">Beach Volley</div>
-        <div class="login-sub">Tournament Manager Pro</div>
+    <div style="text-align:center;padding:8px 0 28px">
+        <div style="font-size:3.5rem;line-height:1;margin-bottom:10px">🏐</div>
+        <div style="font-family:'Barlow Condensed','Oswald',sans-serif;font-size:2.2rem;
+            font-weight:900;text-transform:uppercase;letter-spacing:5px;color:#fff">MBT-BVL 2.0</div>
+        <div style="color:#e8002d;font-size:0.68rem;letter-spacing:4px;text-transform:uppercase;
+            font-weight:700;margin-top:4px">Master Ball Academy · Beach Volleyball League</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    tab_admin, tab_ospite = st.tabs(["🔑 Admin", "👁️ Ospite"])
+    tab_admin, tab_atleta, tab_ospite = st.tabs(["🔑 Admin", "🏐 Atleta", "👁️ Ospite"])
 
     with tab_admin:
         st.caption("Accesso completo: gestione torneo, incassi, tema, impostazioni.")
         pw = st.text_input("Password Admin", type="password", key="pw_admin")
-        if st.button("🔓 Entra come Admin", use_container_width=True, key="btn_login_admin", type="primary"):
+        if st.button("🔓 Entra come Admin", use_container_width=True,
+                      key="btn_login_admin", type="primary"):
             if _hash(pw) == _hash(ADMIN_PASSWORD):
                 st.session_state.user_role = "admin"
+                st.session_state.logged_user = None
                 st.rerun()
             else:
                 st.error("❌ Password errata.")
 
+    with tab_atleta:
+        st.caption("Accedi con il tuo profilo atleta registrato.")
+        at_email = st.text_input("Email", key="at_email", placeholder="tuaemail@esempio.com")
+        at_pw    = st.text_input("Password", type="password", key="at_pw")
+        if st.button("🏐 Accedi come Atleta", use_container_width=True,
+                      key="btn_login_atleta", type="primary"):
+            from auth_manager import login_atleta
+            user = login_atleta(at_email, at_pw)
+            if user:
+                st.session_state.user_role = "atleta"
+                st.session_state.logged_user = user
+                st.rerun()
+            else:
+                st.error("❌ Email o password errata.")
+        st.divider()
+        st.caption("Non hai ancora un profilo?")
+        if st.button("📝 Registrati come Atleta", use_container_width=True,
+                      key="btn_goto_reg"):
+            st.session_state.show_registrazione = True
+            st.rerun()
+
     with tab_ospite:
-        st.caption("Visualizza classifica, tabellone, profili atleti e segnapunti live.")
+        st.caption("Visualizza classifica, tabellone, profili atleti, tornei e segnapunti live.")
         if USER_PASSWORD:
             pw_u = st.text_input("Password Ospite", type="password", key="pw_user")
             accesso_ok = _hash(pw_u) == _hash(USER_PASSWORD)
@@ -99,13 +116,14 @@ def _render_login():
         if st.button(btn_label, use_container_width=True, key="btn_login_ospite"):
             if accesso_ok:
                 st.session_state.user_role = "user"
+                st.session_state.logged_user = None
                 st.rerun()
             else:
                 st.error("❌ Password errata.")
 
     st.markdown("""
-    <div style="text-align:center;margin-top:32px;font-size:0.62rem;color:#555;letter-spacing:2px">
-        BEACH VOLLEY TOURNAMENT MANAGER PRO
+    <div style="text-align:center;margin-top:28px;font-size:0.6rem;color:#444;letter-spacing:2px">
+        MBT-BVL 2.0 · MASTER BALL ACADEMY
     </div>
     """, unsafe_allow_html=True)
 
@@ -130,6 +148,10 @@ if "show_atleta_popup" not in st.session_state:
     st.session_state.show_atleta_popup = None
 if "show_bracket_overlay" not in st.session_state:
     st.session_state.show_bracket_overlay = False
+if "logged_user" not in st.session_state:
+    st.session_state.logged_user = None
+if "show_registrazione" not in st.session_state:
+    st.session_state.show_registrazione = False
 
 state = st.session_state.state
 
@@ -141,7 +163,9 @@ state["torneo"].setdefault("sistema_qualificazione", "Prime classificate")
 theme_cfg = st.session_state.theme_cfg
 logo_html = inject_theme_css(theme_cfg)
 
-is_admin = _is_admin()
+is_admin  = _is_admin()
+is_atleta = _is_atleta()
+logged_user = st.session_state.get("logged_user")
 
 
 # ─── HELPERS UI ───────────────────────────────────────────────────────────────
@@ -159,7 +183,7 @@ def render_header():
         <div class="tournament-header" style="padding:{padding}">
             {logo_html}
             <div class="tournament-title" style="font-size:{title_size}">🏐 {nome}</div>
-            <div class="tournament-subtitle">Tournament Manager Pro</div>
+            <div class="tournament-subtitle">MBT-BVL 2.0 · Master Ball Academy</div>
         </div>
         """, unsafe_allow_html=True)
     render_banner(theme_cfg)
@@ -189,9 +213,17 @@ def render_bottom_nav():
             ("incassi","💰","Incassi"), ("live","🔴" if is_segna else "📊","Live"),
             ("rivals","⚡","Rivals"), ("theme","🎨","Tema"),
         ]
+    elif is_atleta:
+        nav_items = [
+            ("torneo","🏐","Torneo"), ("ranking","🏅","Ranking"),
+            ("profilo_personale","👤","Mio Profilo"),
+            ("tornei_programmati","📅","Tornei"),
+            ("live","🔴" if is_segna else "📊","Live"),
+        ]
     else:
         nav_items = [
             ("torneo","🏐","Torneo"), ("ranking","🏅","Ranking"), ("profili","👤","Profili"),
+            ("tornei_programmati","📅","Tornei"),
             ("live","🔴" if is_segna else "📊","Live"), ("trofei","🏆","Trofei"),
         ]
 
@@ -335,9 +367,18 @@ def render_trofei_showcase(state):
 with st.sidebar:
 
     # ── Badge ruolo + pulsante logout ────────────────────────────────────────
-    role_label = "🔑 Admin" if is_admin else "👁️ Ospite"
-    role_color = "#e8002d" if is_admin else "#0070f3"
-    role_desc  = "Accesso completo" if is_admin else "Sola lettura"
+    if is_admin:
+        role_label = "🔑 Admin"
+        role_color = "#e8002d"
+        role_desc  = "Accesso completo"
+    elif is_atleta and logged_user:
+        role_label = f"🏐 {logged_user['nome']} {logged_user['cognome']}"
+        role_color = "#ffd700"
+        role_desc  = "Atleta Registrato"
+    else:
+        role_label = "👁️ Ospite"
+        role_color = "#0070f3"
+        role_desc  = "Sola lettura"
 
     col_rb, col_lo = st.columns([3, 1])
     with col_rb:
@@ -356,8 +397,8 @@ with st.sidebar:
     st.markdown(f"""
     <div style="text-align:center;padding:12px 0 10px">
         {logo_html}
-        <div style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text-primary)">Beach Volley</div>
-        <div style="color:var(--accent1);font-size:0.6rem;letter-spacing:4px;text-transform:uppercase;font-weight:700;margin-top:2px">Tournament Manager Pro</div>
+        <div style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text-primary)">MBT-BVL 2.0</div>
+        <div style="color:var(--accent1);font-size:0.6rem;letter-spacing:4px;text-transform:uppercase;font-weight:700;margin-top:2px">Master Ball Academy</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -422,6 +463,16 @@ with st.sidebar:
         if st.button("⚡ Rivals", use_container_width=True, key="btn_rivals_pub"):
             st.session_state.current_page = "rivals"; st.session_state.segnapunti_open = False; st.rerun()
 
+    # Tornei in programma — visibile a tutti
+    if st.button("📅 Tornei in Programma", use_container_width=True, key="btn_tornei_prog"):
+        st.session_state.current_page = "tornei_programmati"; st.session_state.segnapunti_open = False; st.rerun()
+
+    # Profilo personale — solo atleti registrati
+    if is_atleta:
+        if st.button("👤 Il Mio Profilo", use_container_width=True, key="btn_mio_profilo",
+                      type="primary"):
+            st.session_state.current_page = "profilo_personale"; st.session_state.segnapunti_open = False; st.rerun()
+
     # ── SEZIONI SOLO ADMIN ───────────────────────────────────────────────────
     if is_admin:
         st.markdown("<hr style='border-color:var(--border);margin:10px 0 8px'>", unsafe_allow_html=True)
@@ -434,6 +485,9 @@ with st.sidebar:
         with ca2:
             if st.button("🎨 Tema", use_container_width=True, key="btn_theme"):
                 st.session_state.current_page = "theme"; st.session_state.segnapunti_open = False; st.rerun()
+
+        if st.button("📅 Gestisci Tornei in Programma", use_container_width=True, key="btn_admin_tornei_prog"):
+            st.session_state.current_page = "admin_tornei_programmati"; st.session_state.segnapunti_open = False; st.rerun()
 
         if st.button("⚡ MBT RIVALS — Card Game", use_container_width=True, key="btn_rivals"):
             st.session_state.current_page = "rivals"; st.session_state.segnapunti_open = False; st.rerun()
@@ -726,7 +780,29 @@ elif page == "rivals":
     render_header()
     render_mbt_rivals(state)
 
+elif page == "tornei_programmati":
+    render_header()
+    from tornei_programmati import render_tornei_in_programma
+    render_tornei_in_programma(state, user=logged_user)
+
+elif page == "profilo_personale":
+    render_header()
+    if is_atleta and logged_user:
+        from auth_manager import render_profilo_personale
+        render_profilo_personale(state)
+    else:
+        st.warning("🔒 Accedi come Atleta per vedere il tuo profilo personale.")
+
 # ── Pagine solo Admin ────────────────────────────────────────────────────────
+
+elif page == "admin_tornei_programmati":
+    if is_admin:
+        render_header()
+        from tornei_programmati import render_admin_tornei_programmati
+        render_admin_tornei_programmati(state)
+    else:
+        render_header()
+        st.error("🔒 Sezione riservata agli amministratori.")
 
 elif page == "incassi":
     if is_admin:
