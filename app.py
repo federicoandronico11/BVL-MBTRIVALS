@@ -154,6 +154,8 @@ if "show_registrazione" not in st.session_state:
     st.session_state.show_registrazione = False
 if "torneo_dettaglio_id" not in st.session_state:
     st.session_state.torneo_dettaglio_id = None
+if "admin_edit_torneo_id" not in st.session_state:
+    st.session_state.admin_edit_torneo_id = None
 
 state = st.session_state.state
 
