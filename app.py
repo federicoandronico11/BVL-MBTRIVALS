@@ -168,68 +168,85 @@ is_atleta = _is_atleta()
 logged_user = st.session_state.get("logged_user")
 
 # ── Floating button per riaprire la sidebar quando è chiusa ──────────────────
-st.markdown("""
-<style>
-/* Pulsante flottante — visibile SOLO quando la sidebar è collassata */
-#sidebar-open-btn {
-    display: none;
-    position: fixed;
-    top: 14px;
-    left: 14px;
-    z-index: 99999;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #e8002d;
-    border: 2px solid rgba(255,255,255,0.15);
-    box-shadow: 0 4px 18px rgba(232,0,45,0.45), 0 2px 6px rgba(0,0,0,0.5);
-    cursor: pointer;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    color: #fff;
-    transition: transform 0.2s, box-shadow 0.2s;
-    text-decoration: none;
-}
-#sidebar-open-btn:hover {
-    transform: scale(1.12);
-    box-shadow: 0 6px 24px rgba(232,0,45,0.65), 0 2px 8px rgba(0,0,0,0.6);
-}
-
-/* Mostra il bottone solo quando la sidebar è effettivamente chiusa
-   (Streamlit aggiunge aria-expanded="false" al toggle nativo) */
-[data-testid="collapsedControl"] ~ * #sidebar-open-btn,
-section[data-testid="stSidebar"][aria-expanded="false"] ~ div #sidebar-open-btn {
-    display: flex !important;
-}
-</style>
-
-<button id="sidebar-open-btn" title="Apri menu" onclick="
-    (function(){
-        var btn = window.parent.document.querySelector('[data-testid=\\'stSidebarCollapseButton\\'] button')
-                  || window.parent.document.querySelector('[data-testid=\\'collapsedControl\\'] button')
-                  || window.parent.document.querySelector('button[kind=\\'header\\']');
-        if(btn){ btn.click(); }
-    })()
-">⟪</button>
-
+import streamlit.components.v1 as _components
+_components.html("""
 <script>
 (function(){
-    function syncBtn(){
-        var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-        var floatBtn = document.getElementById('sidebar-open-btn');
-        if(!sidebar || !floatBtn) return;
-        var isCollapsed = sidebar.getAttribute('aria-expanded') === 'false'
-                          || sidebar.style.display === 'none'
-                          || sidebar.offsetWidth < 10;
-        floatBtn.style.display = isCollapsed ? 'flex' : 'none';
+    var doc = window.parent.document;
+
+    function getSidebarBtn(){
+        return doc.querySelector('[data-testid="stSidebarCollapseButton"] button')
+            || doc.querySelector('[data-testid="collapsedControl"] button')
+            || doc.querySelector('button[aria-label="open sidebar"]')
+            || doc.querySelector('button[aria-label="Close sidebar"]');
     }
-    // Poll every 300ms — lightweight, handles all Streamlit re-renders
-    setInterval(syncBtn, 300);
-    syncBtn();
+
+    function isSidebarCollapsed(){
+        var sb = doc.querySelector('[data-testid="stSidebar"]');
+        if (!sb) return false;
+        // Streamlit sets aria-expanded="false" when collapsed
+        return sb.getAttribute('aria-expanded') === 'false';
+    }
+
+    // Create floating button in the PARENT document
+    var existing = doc.getElementById('mbt-sidebar-fab');
+    if (!existing) {
+        var fab = doc.createElement('button');
+        fab.id = 'mbt-sidebar-fab';
+        fab.innerHTML = '&#x00BB;&#x00BB;';  // »»
+        fab.title = 'Apri menu laterale';
+        fab.style.cssText = [
+            'position:fixed',
+            'top:14px',
+            'left:14px',
+            'z-index:999999',
+            'width:42px',
+            'height:42px',
+            'border-radius:50%',
+            'background:#e8002d',
+            'border:2px solid rgba(255,255,255,0.2)',
+            'box-shadow:0 4px 18px rgba(232,0,45,0.5),0 2px 6px rgba(0,0,0,0.5)',
+            'cursor:pointer',
+            'display:none',
+            'align-items:center',
+            'justify-content:center',
+            'font-size:1rem',
+            'font-weight:900',
+            'color:#fff',
+            'transition:transform 0.15s,box-shadow 0.15s',
+            'line-height:1'
+        ].join(';');
+        fab.onmouseenter = function(){ fab.style.transform='scale(1.15)'; };
+        fab.onmouseleave = function(){ fab.style.transform='scale(1)'; };
+        fab.onclick = function(){
+            var btn = getSidebarBtn();
+            if (btn) { btn.click(); }
+        };
+        doc.body.appendChild(fab);
+    }
+
+    function syncFab(){
+        var fab = doc.getElementById('mbt-sidebar-fab');
+        if (!fab) return;
+        if (isSidebarCollapsed()) {
+            fab.style.display = 'flex';
+        } else {
+            fab.style.display = 'none';
+        }
+    }
+
+    // Observe sidebar attribute changes for instant response
+    var sb = doc.querySelector('[data-testid="stSidebar"]');
+    if (sb) {
+        var observer = new MutationObserver(syncFab);
+        observer.observe(sb, { attributes: true, attributeFilter: ['aria-expanded', 'style'] });
+    }
+    // Also poll as fallback
+    setInterval(syncFab, 400);
+    syncFab();
 })();
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
 
 # ─── HELPERS UI ───────────────────────────────────────────────────────────────
