@@ -167,6 +167,70 @@ is_admin  = _is_admin()
 is_atleta = _is_atleta()
 logged_user = st.session_state.get("logged_user")
 
+# ── Floating button per riaprire la sidebar quando è chiusa ──────────────────
+st.markdown("""
+<style>
+/* Pulsante flottante — visibile SOLO quando la sidebar è collassata */
+#sidebar-open-btn {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 99999;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e8002d;
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: 0 4px 18px rgba(232,0,45,0.45), 0 2px 6px rgba(0,0,0,0.5);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #fff;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+}
+#sidebar-open-btn:hover {
+    transform: scale(1.12);
+    box-shadow: 0 6px 24px rgba(232,0,45,0.65), 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* Mostra il bottone solo quando la sidebar è effettivamente chiusa
+   (Streamlit aggiunge aria-expanded="false" al toggle nativo) */
+[data-testid="collapsedControl"] ~ * #sidebar-open-btn,
+section[data-testid="stSidebar"][aria-expanded="false"] ~ div #sidebar-open-btn {
+    display: flex !important;
+}
+</style>
+
+<button id="sidebar-open-btn" title="Apri menu" onclick="
+    (function(){
+        var btn = window.parent.document.querySelector('[data-testid=\\'stSidebarCollapseButton\\'] button')
+                  || window.parent.document.querySelector('[data-testid=\\'collapsedControl\\'] button')
+                  || window.parent.document.querySelector('button[kind=\\'header\\']');
+        if(btn){ btn.click(); }
+    })()
+">⟪</button>
+
+<script>
+(function(){
+    function syncBtn(){
+        var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        var floatBtn = document.getElementById('sidebar-open-btn');
+        if(!sidebar || !floatBtn) return;
+        var isCollapsed = sidebar.getAttribute('aria-expanded') === 'false'
+                          || sidebar.style.display === 'none'
+                          || sidebar.offsetWidth < 10;
+        floatBtn.style.display = isCollapsed ? 'flex' : 'none';
+    }
+    // Poll every 300ms — lightweight, handles all Streamlit re-renders
+    setInterval(syncBtn, 300);
+    syncBtn();
+})();
+</script>
+""", unsafe_allow_html=True)
+
 
 # ─── HELPERS UI ───────────────────────────────────────────────────────────────
 
