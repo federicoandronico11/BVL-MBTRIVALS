@@ -152,6 +152,8 @@ if "logged_user" not in st.session_state:
     st.session_state.logged_user = None
 if "show_registrazione" not in st.session_state:
     st.session_state.show_registrazione = False
+if "torneo_dettaglio_id" not in st.session_state:
+    st.session_state.torneo_dettaglio_id = None
 
 state = st.session_state.state
 
