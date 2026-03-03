@@ -404,25 +404,57 @@ def get_all_registered_users() -> dict:
 
 # ─── PROFILO ATLETA (pagina) ──────────────────────────────────────────────────
 
+
+
 def render_profilo_personale(state):
-    """Pagina del profilo personale dell'atleta loggato."""
+    """Pagina del profilo personale dell'atleta loggato.
+    Mostra sempre la carta FC26 anche senza tornei, con upload foto.
+    """
+    import base64 as _b64
     user = st.session_state.get("logged_user")
     if not user:
         st.error("Devi essere loggato come atleta per vedere il profilo.")
         return
 
-    from data_manager import get_atleta_by_id, calcola_overall_fifa, get_card_type
+    from data_manager import get_atleta_by_id, calcola_overall_fifa, get_card_type, save_state
 
     nome_completo = f"{user['nome']} {user['cognome']}"
     atleta_id = user.get("atleta_id")
     atleta = get_atleta_by_id(state, atleta_id) if atleta_id else None
 
-    # ── Header profilo ────────────────────────────────────────────────────────
+    # Se atleta non esiste ancora, crealo automaticamente
+    if not atleta:
+        from data_manager import new_atleta
+        atleta = new_atleta(user["nome"], user["cognome"])
+        atleta["email"] = user.get("email", "")
+        state["atleti"].append(atleta)
+        save_state(state)
+        users = _load_users()
+        users[user["email"]]["atleta_id"] = atleta["id"]
+        _save_users(users)
+        st.session_state.logged_user["atleta_id"] = atleta["id"]
+        user = st.session_state.logged_user
+
+    s         = atleta["stats"]
+    overall   = calcola_overall_fifa(atleta)
+    card_type = get_card_type(overall)
+
+    # ── Header profilo ─────────────────────────────────────────────────────
+    foto_b64 = atleta.get("foto_b64")
+    if foto_b64:
+        avatar_html = (f'<img src="data:image/jpeg;base64,{foto_b64}" '
+                       f'style="width:72px;height:72px;border-radius:50%;'
+                       f'object-fit:cover;border:3px solid #e8002d;flex-shrink:0">')
+    else:
+        avatar_html = ('<div style="width:72px;height:72px;border-radius:50%;'
+                       'background:linear-gradient(135deg,#e8002d,#ffd700);'
+                       'display:flex;align-items:center;justify-content:center;'
+                       'font-size:2rem;flex-shrink:0">🏐</div>')
+
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#13131a,#1a1a2e);border:2px solid #e8002d;
         border-radius:16px;padding:28px;margin-bottom:24px;display:flex;align-items:center;gap:20px">
-        <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#e8002d,#ffd700);
-            display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0">🏐</div>
+        {avatar_html}
         <div>
             <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;
                 color:#fff;text-transform:uppercase;letter-spacing:2px">{nome_completo}</div>
@@ -433,62 +465,129 @@ def render_profilo_personale(state):
     </div>
     """, unsafe_allow_html=True)
 
-    tab_stats, tab_anagrafica, tab_tornei = st.tabs(["📊 Statistiche", "👤 Dati Personali", "🏆 Tornei"])
+    tab_carta, tab_stats, tab_anagrafica, tab_tornei = st.tabs(
+        ["🃏 La Mia Carta", "📊 Statistiche", "👤 Dati Personali", "🏆 Tornei"]
+    )
 
-    # ── Tab Statistiche ───────────────────────────────────────────────────────
-    with tab_stats:
-        if atleta:
-            s = atleta["stats"]
-            overall = calcola_overall_fifa(atleta)
-            card_type = get_card_type(overall)
+    # ── Tab Carta FC26 ─────────────────────────────────────────────────────
+    with tab_carta:
+        st.markdown("### 🃏 La tua Carta MBT-BVL 2.0")
+        st.caption("La tua carta evolve con i tornei. Carica la tua foto per personalizzarla!")
 
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("OVR", overall)
-            with col2:
-                st.metric("Tornei", s["tornei"])
-            with col3:
-                st.metric("Vittorie", s["vittorie"])
-            with col4:
-                win_rate = round(s["vittorie"] / max(s["tornei"], 1) * 100, 1)
-                st.metric("Win Rate", f"{win_rate}%")
+        col_card, col_foto = st.columns([1, 1], gap="large")
 
-            st.divider()
-            st.markdown("#### 🎯 Attributi")
-            attrs = {
-                "Attacco ⚡": s.get("attacco", 40),
-                "Difesa 🛡️": s.get("difesa", 40),
-                "Muro 🧱": s.get("muro", 40),
-                "Ricezione 🤲": s.get("ricezione", 40),
-                "Battuta 🏐": s.get("battuta", 40),
-                "Alzata 🙌": s.get("alzata", 40),
+        with col_card:
+            ranking_entry = {
+                "atleta": atleta, "id": atleta["id"], "nome": atleta["nome"],
+                "tornei": s["tornei"], "vittorie": s["vittorie"], "sconfitte": s["sconfitte"],
+                "set_vinti": s.get("set_vinti", 0), "set_persi": s.get("set_persi", 0),
+                "punti_fatti": s.get("punti_fatti", 0), "punti_subiti": s.get("punti_subiti", 0),
+                "quoziente_punti": 0, "quoziente_set": 0,
+                "win_rate": round(s["vittorie"] / max(s["tornei"], 1) * 100, 1),
+                "rank_pts": 0, "oro": 0, "argento": 0, "bronzo": 0,
+                "storico": s.get("storico_posizioni", []),
+                "overall": overall, "card_type": card_type,
             }
-            col_a, col_b = st.columns(2)
-            for i, (attr_name, val) in enumerate(attrs.items()):
-                with (col_a if i % 2 == 0 else col_b):
-                    st.markdown(f"""
-                    <div style="margin-bottom:10px">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.82rem">
-                            <span>{attr_name}</span>
-                            <span style="font-weight:700;color:#ffd700">{val}</span>
-                        </div>
-                        <div style="background:#1a1a2e;border-radius:4px;height:8px">
-                            <div style="background:linear-gradient(90deg,#e8002d,#ffd700);
-                                width:{val}%;height:8px;border-radius:4px;transition:width 0.3s"></div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            from ranking_page import render_card_html, CARD_ANIMATIONS
+            st.markdown(CARD_ANIMATIONS, unsafe_allow_html=True)
+            st.markdown(render_card_html(ranking_entry, size="normal", clickable=False),
+                        unsafe_allow_html=True)
 
+        with col_foto:
+            st.markdown("#### 📸 Foto Profilo")
+            st.caption("Usa una foto quadrata JPG o PNG per il miglior risultato.")
+
+            uploaded_foto = st.file_uploader(
+                "Carica foto", type=["jpg", "jpeg", "png", "webp"],
+                key="upload_foto_profilo", label_visibility="collapsed"
+            )
+
+            if uploaded_foto:
+                img_bytes = uploaded_foto.read()
+                img_b64   = _b64.b64encode(img_bytes).decode()
+                ext       = uploaded_foto.type.split("/")[-1]
+                st.markdown(
+                    f'<img src="data:image/{ext};base64,{img_b64}" '
+                    f'style="width:140px;height:140px;object-fit:cover;border-radius:50%;'
+                    f'border:3px solid #e8002d;display:block;margin:12px auto">',
+                    unsafe_allow_html=True
+                )
+                if st.button("✅ Salva Foto sulla Carta", use_container_width=True,
+                              key="btn_salva_foto", type="primary"):
+                    atleta["foto_b64"] = img_b64
+                    save_state(state)
+                    st.success("📸 Foto aggiornata! La carta ora mostra il tuo volto.")
+                    st.rerun()
+
+            elif foto_b64:
+                st.markdown(
+                    f'<img src="data:image/jpeg;base64,{foto_b64}" '
+                    f'style="width:140px;height:140px;object-fit:cover;border-radius:50%;'
+                    f'border:3px solid #00c851;display:block;margin:12px auto">',
+                    unsafe_allow_html=True
+                )
+                st.caption("✅ Foto attuale")
+                if st.button("🗑️ Rimuovi foto", key="btn_rm_foto", use_container_width=True):
+                    atleta["foto_b64"] = None
+                    save_state(state)
+                    st.info("Foto rimossa.")
+                    st.rerun()
+            else:
+                st.markdown("""
+                <div style="width:140px;height:140px;border-radius:50%;border:3px dashed #333;
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:2.5rem;margin:12px auto;color:#444">👤</div>
+                """, unsafe_allow_html=True)
+                st.caption("Nessuna foto caricata.")
+
+            st.markdown("---")
             st.markdown(f"""
             <div style="background:#13131a;border:1px solid #333;border-radius:8px;
-                padding:12px 16px;margin-top:8px;font-size:0.8rem;color:#888">
-                🃏 Categoria carta: <strong style="color:#ffd700">{card_type.replace('_',' ').upper()}</strong>
+                padding:12px 16px;font-size:0.8rem">
+                <div style="color:#888;font-size:0.65rem;letter-spacing:2px;
+                    text-transform:uppercase;margin-bottom:6px">La tua carta</div>
+                <div style="font-weight:800;color:#ffd700;font-size:1.1rem">OVR {overall}</div>
+                <div style="color:#aaa;margin-top:4px">{card_type.replace("_"," ").upper()}</div>
+                <div style="color:#555;font-size:0.72rem;margin-top:8px">
+                    La carta evolve giocando nei tornei 🏐</div>
             </div>
             """, unsafe_allow_html=True)
-        else:
-            st.info("Nessuna statistica disponibile. Partecipa a un torneo per sbloccare le tue statistiche!")
 
-    # ── Tab Dati Personali ────────────────────────────────────────────────────
+    # ── Tab Statistiche ────────────────────────────────────────────────────
+    with tab_stats:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("OVR", overall)
+        with col2: st.metric("Tornei", s["tornei"])
+        with col3: st.metric("Vittorie", s["vittorie"])
+        with col4:
+            wr = round(s["vittorie"] / max(s["tornei"], 1) * 100, 1)
+            st.metric("Win Rate", f"{wr}%")
+        st.divider()
+        st.markdown("#### 🎯 Attributi")
+        attrs = {
+            "Attacco ⚡": s.get("attacco", 40), "Difesa 🛡️": s.get("difesa", 40),
+            "Muro 🧱": s.get("muro", 40),       "Ricezione 🤲": s.get("ricezione", 40),
+            "Battuta 🏐": s.get("battuta", 40), "Alzata 🙌": s.get("alzata", 40),
+        }
+        col_a, col_b = st.columns(2)
+        for i, (attr_name, val) in enumerate(attrs.items()):
+            with (col_a if i % 2 == 0 else col_b):
+                st.markdown(f"""
+                <div style="margin-bottom:10px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.82rem">
+                        <span>{attr_name}</span>
+                        <span style="font-weight:700;color:#ffd700">{val}</span>
+                    </div>
+                    <div style="background:#1a1a2e;border-radius:4px;height:8px">
+                        <div style="background:linear-gradient(90deg,#e8002d,#ffd700);
+                            width:{val}%;height:8px;border-radius:4px"></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        if s["tornei"] == 0:
+            st.info("🏐 Non hai ancora partecipato a tornei. Gli attributi cresceranno ad ogni torneo!")
+
+    # ── Tab Dati Personali ─────────────────────────────────────────────────
     with tab_anagrafica:
         st.markdown("#### 👤 I tuoi dati personali")
         col1, col2 = st.columns(2)
@@ -500,38 +599,32 @@ def render_profilo_personale(state):
             st.markdown(f"**Codice Fiscale:** {user.get('codice_fiscale','—')}")
             st.markdown(f"**Residenza:** {user.get('residenza','—')}")
             st.markdown(f"**Registrato il:** {user.get('data_registrazione','—')}")
-
         st.divider()
         st.markdown("#### 📋 Consensi Privacy")
-        privacies = [
-            ("Utilizzo app", user.get("privacy_app", False)),
+        for label, val in [
+            ("Utilizzo app",          user.get("privacy_app", False)),
             ("Marketing commerciale", user.get("privacy_commerciale", False)),
-            ("Utilizzo immagine", user.get("privacy_immagine", False)),
-        ]
-        for label, val in privacies:
-            icon = "✅" if val else "❌"
-            st.markdown(f"{icon} **{label}**")
+            ("Utilizzo immagine",     user.get("privacy_immagine", False)),
+        ]:
+            st.markdown(f"{'✅' if val else '❌'} **{label}**")
 
-    # ── Tab Tornei ────────────────────────────────────────────────────────────
+    # ── Tab Tornei ─────────────────────────────────────────────────────────
     with tab_tornei:
         st.markdown("#### 🏆 Storico Tornei")
-        if atleta and atleta["stats"].get("storico_posizioni"):
-            storico = atleta["stats"]["storico_posizioni"]
+        if s.get("storico_posizioni"):
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-            for entry in storico:
+            for entry in s["storico_posizioni"]:
                 torneo_nome, pos = entry[0], entry[1]
                 icon = medals.get(pos, f"#{pos}")
-                col_t1, col_t2 = st.columns([3, 1])
-                with col_t1:
-                    st.markdown(f"**{icon} {torneo_nome}**")
-                with col_t2:
-                    st.markdown(f"<span style='color:#888'>{pos}° posto</span>", unsafe_allow_html=True)
+                c1, c2 = st.columns([3, 1])
+                with c1: st.markdown(f"**{icon} {torneo_nome}**")
+                with c2: st.markdown(f"<span style='color:#888'>{pos}° posto</span>",
+                                      unsafe_allow_html=True)
                 st.markdown("---")
         else:
-            st.info("Nessun torneo completato ancora.")
+            st.info("Nessun torneo completato ancora. Iscriviti per iniziare!")
 
-        # Iscrizioni ai prossimi tornei
-        tornei_futuri = state.get("tornei_programmati", [])
+        tornei_futuri = [t for t in state.get("tornei_programmati", []) if t.get("attivo", True)]
         if tornei_futuri:
             st.markdown("#### 📅 Prossimi Tornei Disponibili")
             for torneo in tornei_futuri:
