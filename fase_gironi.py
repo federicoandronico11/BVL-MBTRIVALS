@@ -86,13 +86,37 @@ def _render_configurazione_gironi(state):
     with st.expander("⚙️ Impostazioni Passaggio Turno", expanded=False):
         col_s1, col_s2 = st.columns(2)
         with col_s1:
-            num_passano = st.selectbox(
-                "Squadre che passano per girone",
-                [1, 2, 3, 4],
-                index=[1,2,3,4].index(state["torneo"].get("squadre_per_girone_passano", 2)),
-                help="Quante squadre qualificate per ogni girone"
+            from data_manager import BRACKET_ROUND_NAMES, _bracket_size_from_n
+            n_gironi_att    = len(state["gironi"])
+            sq_per_girone_max = max(1, min(
+                8,
+                min(len(g["squadre"]) for g in state["gironi"]) if state["gironi"] else 8
+            ))
+            passano_cur = state["torneo"].get("squadre_per_girone_passano", 2)
+            if not isinstance(passano_cur, int) or passano_cur < 1:
+                passano_cur = 2
+            passano_cur = min(passano_cur, sq_per_girone_max)
+            num_passano = st.number_input(
+                "Squadre qualificate per girone",
+                min_value=1,
+                max_value=sq_per_girone_max,
+                value=passano_cur,
+                step=1,
+                help="Quante squadre per girone avanzano ai playoff"
             )
+            num_passano = int(num_passano)
             state["torneo"]["squadre_per_girone_passano"] = num_passano
+
+            # Preview tabellone
+            qualif_tot   = num_passano * n_gironi_att
+            b_size       = _bracket_size_from_n(qualif_tot)
+            n_bye_prev   = b_size - qualif_tot
+            round_prev   = BRACKET_ROUND_NAMES.get(b_size, str(b_size) + " sq.")
+            bye_txt      = (f" · **{n_bye_prev} BYE** assegnati alle prime classificate"
+                            if n_bye_prev > 0 else " · Tabellone perfetto ✓")
+            st.caption(
+                f"🏆 {qualif_tot} qualificate → **{round_prev}** (tabellone {b_size})" + bye_txt
+            )
         with col_s2:
             sistema = st.selectbox(
                 "Sistema di qualificazione",
@@ -113,17 +137,16 @@ def _genera_e_avanza(state):
     squadre_passano = state["torneo"].get("squadre_per_girone_passano", 2)
     bracket = genera_bracket_da_gironi(state["gironi"], state=state, squadre_per_girone_passano=squadre_passano)
 
-    # Assegna round iniziale al bracket
-    n = len(bracket)
-    if n >= 4:
-        round_name = "🏅 Quarti di Finale"
-    elif n >= 2:
-        round_name = "🥇 Semifinali"
-    else:
-        round_name = "🏆 FINALE 1°/2° Posto"
+    # Assegna round iniziale al bracket in base al bracket_size reale
+    from data_manager import BRACKET_ROUND_NAMES
+    bracket_size = state["torneo"].get("bracket_size", len(bracket) * 2)
+    round_name   = BRACKET_ROUND_NAMES.get(bracket_size, f"🏅 Fase {bracket_size} squadre")
 
     for p in bracket:
-        p["round"] = round_name
+        if not p.get("is_bye"):          # i BYE hanno già il round impostato
+            p["round"] = round_name
+        else:
+            p["round"] = round_name      # stesso round, ma confermata=True
 
     state["bracket"] = bracket
     state["bracket_extra"] = []
