@@ -62,20 +62,67 @@ def render_setup(state):
                     "Numero di Gironi",
                     options=list(range(1, min(max_gironi+1, 21))),
                     value=max(1, min(num_gironi_val, 20)),
-                    help="Quanti gironi dividere le squadre"
+                    help="Quanti gironi dividere le squadre (1-20)"
                 )
                 state["torneo"]["num_gironi"] = num_gironi
 
-                passano_opts = [1, 2, 3, 4]
+                # Numero squadre qualificate per girone — input libero
                 passano_val = state["torneo"].get("squadre_per_girone_passano", 2)
-                if passano_val not in passano_opts: passano_val = 2
-                squadre_passano = st.selectbox(
+                if not isinstance(passano_val, int) or passano_val < 1:
+                    passano_val = 2
+                squadre_passano = st.number_input(
                     "Squadre qualificate per girone",
-                    passano_opts,
-                    index=passano_opts.index(passano_val),
-                    help="Quante squadre avanzano dai gironi ai playoff"
+                    min_value=1,
+                    max_value=max(1, (n_squadre_real // max(num_gironi, 1))),
+                    value=min(passano_val, max(1, n_squadre_real // max(num_gironi, 1))),
+                    step=1,
+                    help="Quante squadre per girone passano alla fase eliminatoria"
                 )
-                state["torneo"]["squadre_per_girone_passano"] = squadre_passano
+                state["torneo"]["squadre_per_girone_passano"] = int(squadre_passano)
+
+                # ── Calcolo tabellone eliminatorio e BYE ─────────────────
+                qualificate_totali = int(squadre_passano) * num_gironi
+                BRACKET_SIZES = [2, 4, 8, 16, 32, 64, 128]
+                BRACKET_NAMES = {
+                    2:   "Finale 1°/2° posto",
+                    4:   "Semifinali",
+                    8:   "Quarti di Finale",
+                    16:  "Ottavi di Finale",
+                    32:  "Sedicesimi di Finale",
+                    64:  "Trentaduesimi di Finale",
+                    128: "Sessantaquattresimi di Finale",
+                }
+                bracket_size = next(
+                    (s for s in BRACKET_SIZES if s >= qualificate_totali),
+                    BRACKET_SIZES[-1]
+                )
+                n_bye = bracket_size - qualificate_totali
+                stato_bracket = BRACKET_NAMES.get(bracket_size, str(bracket_size) + " squadre")
+                state["torneo"]["bracket_size"]     = bracket_size
+                state["torneo"]["n_bye_playoff"]    = n_bye
+                state["torneo"]["fase_partenza_eliminatoria"] = stato_bracket
+
+                # Mostra riepilogo tabellone
+                if n_bye > 0:
+                    st.markdown(
+                        f'<div style="background:#1a1a0a;border:1px solid #ffd700;border-radius:8px;"'
+                        f'      "padding:10px 14px;font-size:0.8rem;margin-top:6px">"'
+                        f'<strong style="color:#ffd700">🏆 Tabellone: {stato_bracket}</strong><br>"'
+                        f'<span style="color:#ccc">{qualificate_totali} squadre qualificate "'
+                        f'" → tabellone da <strong>{bracket_size}</strong> "'
+                        f'" · <strong style="color:#00c851">{n_bye} BYE</strong> aggiunto/i automaticamente"'
+                        f'" (passano il turno senza giocare)</span></div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="background:#0a1a0a;border:1px solid #00c851;border-radius:8px;"'
+                        f'      "padding:10px 14px;font-size:0.8rem;margin-top:6px">"'
+                        f'<strong style="color:#00c851">🏆 Tabellone: {stato_bracket}</strong><br>"'
+                        f'<span style="color:#ccc">{qualificate_totali} squadre — tabellone perfetto, nessun BYE necessario.</span>"'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
 
                 sistema_opts = ["Prime classificate", "Classifica avulsa tra pari"]
                 sistema_idx = sistema_opts.index(state["torneo"].get("sistema_qualificazione", "Prime classificate"))
@@ -143,20 +190,45 @@ def render_setup(state):
                         save_state(state)
                         st.rerun()
 
-    # Anteprima struttura gironi
+    # Anteprima struttura gironi + tabellone eliminatorio
     if real_count >= 2:
-        num_gironi = state["torneo"].get("num_gironi", 2) if state["torneo"].get("modalita") != "Girone Unico" else 1
-        sq_per_girone = real_count // num_gironi if num_gironi > 0 else real_count
-        passano = state["torneo"].get("squadre_per_girone_passano", 2)
+        num_gironi      = state["torneo"].get("num_gironi", 2) if state["torneo"].get("modalita") != "Girone Unico" else 1
+        sq_per_girone   = real_count // num_gironi if num_gironi > 0 else real_count
+        passano         = state["torneo"].get("squadre_per_girone_passano", 2)
         qualificate_totali = passano * num_gironi
 
-        st.markdown(f"""
-        <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:0.82rem;color:var(--text-secondary)">
-            📐 <strong>Struttura prevista:</strong>
-            {num_gironi} girone/i da ~{sq_per_girone} squadre
-            {"· " + str(qualificate_totali) + " qualificate ai playoff" if state["torneo"].get("modalita") != "Girone Unico" else "· Classifica finale diretta"}
-        </div>
-        """, unsafe_allow_html=True)
+        # Calcola bracket e BYE
+        BRACKET_SIZES = [2, 4, 8, 16, 32, 64, 128]
+        BRACKET_NAMES = {
+            2: "Finale 1°/2°", 4: "Semifinali", 8: "Quarti di Finale",
+            16: "Ottavi di Finale", 32: "Sedicesimi", 64: "Trentaduesimi",
+            128: "Sessantaquattresimi",
+        }
+        bracket_size = next((s for s in BRACKET_SIZES if s >= qualificate_totali), BRACKET_SIZES[-1])
+        n_bye        = bracket_size - qualificate_totali
+        bracket_name = BRACKET_NAMES.get(bracket_size, str(bracket_size) + " sq.")
+
+        bye_html = (
+            f' · <strong style="color:#00c851">{n_bye} BYE</strong>'
+            if n_bye > 0 else
+            ' · <strong style="color:#00c851">Tabellone perfetto ✓</strong>'
+        )
+        if state["torneo"].get("modalita") != "Girone Unico":
+            extra_info = (
+                f' · {qualificate_totali} qualificate' +
+                f' → <strong>{bracket_name}</strong> (tabellone da {bracket_size})' +
+                bye_html
+            )
+        else:
+            extra_info = " · Classifica finale diretta"
+
+        st.markdown(
+            f'<div style="background:var(--bg-card2);border:1px solid var(--border);' +
+            f'border-radius:10px;padding:12px 16px;font-size:0.82rem;color:var(--text-secondary)">' +
+            f'📐 <strong>Struttura prevista:</strong> {num_gironi} girone/i da ~{sq_per_girone} squadre' +
+            extra_info + '</div>',
+            unsafe_allow_html=True
+        )
 
     col_a, col_b = st.columns([2, 1])
     with col_a:
@@ -181,6 +253,15 @@ def render_setup(state):
                 state["gironi"] = genera_gironi(ids, num_gironi, use_ranking=use_ranking, state=state)
                 state["bracket"] = []
                 state["bracket_extra"] = []
+                # Salva bracket_size e n_bye calcolati nelle impostazioni avanzate
+                # (se non presenti usa calcolo rapido)
+                passano_pg     = state["torneo"].get("squadre_per_girone_passano", 2)
+                qualif_tot     = int(passano_pg) * num_gironi
+                _BSIZES        = [2, 4, 8, 16, 32, 64, 128]
+                b_size         = next((s for s in _BSIZES if s >= qualif_tot), _BSIZES[-1])
+                n_bye_auto     = b_size - qualif_tot
+                state["torneo"]["bracket_size"]  = b_size
+                state["torneo"]["n_bye_playoff"] = n_bye_auto
                 state["fase"] = "gironi"
                 save_state(state)
                 st.rerun()
