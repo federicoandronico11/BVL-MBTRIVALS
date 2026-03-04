@@ -1,12 +1,37 @@
 """
-data_manager.py — Gestione persistenza JSON e modelli dati v5
+data_manager.py — Gestione persistenza Google Sheets v6
 Nuovi atleti partono con overall 40 (bronzo_raro) anche senza tornei.
+Salvataggio automatico su Google Sheets invece di file JSON locale.
 """
 import json, os, random
+import streamlit as st
 from datetime import datetime
 from pathlib import Path
 
-DATA_FILE = "beach_volley_data.json"
+DATA_FILE = "beach_volley_data.json"  # fallback locale se Sheets non disponibile
+
+SHEET_ID = "180VldT6RUNEYAo-N4EVkJouzChFTGcdJe5c8RazFUEg"
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+@st.cache_resource
+def _get_gsheet():
+    """Connessione al Google Sheet (cached per tutta la sessione)."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=SCOPES
+        )
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SHEET_ID).sheet1
+        return sheet
+    except Exception as e:
+        st.warning(f"⚠️ Google Sheets non disponibile, uso file locale. ({e})")
+        return None
 
 def empty_state():
     return {
@@ -29,27 +54,56 @@ def empty_state():
         "podio": [],
     }
 
+def _migrate(data):
+    """Aggiunge campi mancanti per compatibilità tra versioni."""
+    base = empty_state()
+    for k, v in base.items():
+        data.setdefault(k, v)
+    t = data.get("torneo", {})
+    if "tipo_gioco" not in t: t["tipo_gioco"] = "2x2"
+    if "usa_ranking_teste_serie" not in t: t["usa_ranking_teste_serie"] = False
+    if "min_squadre" not in t: t["min_squadre"] = 4
+    if "num_gironi" not in t: t["num_gironi"] = 2
+    if "squadre_per_girone_passano" not in t: t["squadre_per_girone_passano"] = 2
+    if "sistema_qualificazione" not in t: t["sistema_qualificazione"] = "Prime classificate"
+    if "modalita" not in t: t["modalita"] = "Gironi + Playoff"
+    return data
+
 def load_state():
+    # 1. Prova Google Sheets
+    sheet = _get_gsheet()
+    if sheet is not None:
+        try:
+            val = sheet.cell(2, 1).value
+            if val:
+                data = json.loads(val)
+                return _migrate(data)
+        except Exception as e:
+            st.warning(f"⚠️ Errore lettura Sheets, uso file locale. ({e})")
+
+    # 2. Fallback: file locale
     if Path(DATA_FILE).exists():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        base = empty_state()
-        for k, v in base.items():
-            data.setdefault(k, v)
-        t = data.get("torneo", {})
-        if "tipo_gioco" not in t: t["tipo_gioco"] = "2x2"
-        if "usa_ranking_teste_serie" not in t: t["usa_ranking_teste_serie"] = False
-        if "min_squadre" not in t: t["min_squadre"] = 4
-        if "num_gironi" not in t: t["num_gironi"] = 2
-        if "squadre_per_girone_passano" not in t: t["squadre_per_girone_passano"] = 2
-        if "sistema_qualificazione" not in t: t["sistema_qualificazione"] = "Prime classificate"
-        if "modalita" not in t: t["modalita"] = "Gironi + Playoff"
-        return data
+        return _migrate(data)
+
     return empty_state()
 
 def save_state(state):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    # 1. Salva su Google Sheets
+    sheet = _get_gsheet()
+    if sheet is not None:
+        try:
+            sheet.update("A1", [["data"], [json.dumps(state, ensure_ascii=False)]])
+        except Exception as e:
+            st.warning(f"⚠️ Errore salvataggio Sheets, salvo in locale. ({e})")
+            # Fallback locale
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+    else:
+        # Fallback locale
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
 
 def new_atleta(nome, cognome=""):
     full_name = f"{nome} {cognome}".strip() if cognome else nome
