@@ -1,21 +1,43 @@
 """
 incassi.py — Gestione incassi torneo + PDF grafici
+Salvataggio su Google Sheets (colonna B) invece di file JSON locale.
 """
 import streamlit as st
 import json
 from pathlib import Path
-from data_manager import save_state, get_squadra_by_id, get_atleta_by_id
+from data_manager import save_state, get_squadra_by_id, get_atleta_by_id, _get_gsheet
 
 INCASSI_FILE = "beach_volley_incassi.json"
 
 
 def load_incassi():
+    # 1. Prova Google Sheets (colonna B)
+    sheet = _get_gsheet()
+    if sheet is not None:
+        try:
+            val = sheet.cell(2, 2).value
+            if val:
+                return json.loads(val)
+        except Exception:
+            pass
+
+    # 2. Fallback: file locale
     if Path(INCASSI_FILE).exists():
         with open(INCASSI_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {"tornei": {}}
 
 def save_incassi(data):
+    # 1. Salva su Google Sheets (colonna B)
+    sheet = _get_gsheet()
+    if sheet is not None:
+        try:
+            sheet.update("B1", [["incassi"], [json.dumps(data, ensure_ascii=False)]])
+            return
+        except Exception as e:
+            st.warning(f"⚠️ Errore salvataggio incassi su Sheets, salvo in locale. ({e})")
+
+    # 2. Fallback locale
     with open(INCASSI_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
