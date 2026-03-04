@@ -403,45 +403,153 @@ def classifica_girone(state, girone):
     ))
 
 
+def _bracket_size_from_n(n):
+    """
+    Restituisce la potenza di 2 minima >= n tra i tabelloni standard federali.
+    Tabelloni: 2 (finale), 4 (semifinali), 8 (quarti), 16 (ottavi),
+               32 (sedicesimi), 64 (trentaduesimi), 128 (sessantaquattresimi).
+    """
+    SIZES = [2, 4, 8, 16, 32, 64, 128]
+    for s in SIZES:
+        if s >= n:
+            return s
+    return SIZES[-1]
+
+
+BRACKET_ROUND_NAMES = {
+    128: "⚡ Sessantaquattresimi di Finale",
+    64:  "⚡ Trentaduesimi di Finale",
+    32:  "⚡ Sedicesimi di Finale",
+    16:  "🏅 Ottavi di Finale",
+    8:   "🏅 Quarti di Finale",
+    4:   "🥇 Semifinali",
+    2:   "🏆 FINALE 1°/2° Posto",
+}
+
+
 def genera_bracket_da_gironi(gironi, state=None, squadre_per_girone_passano=2):
     """
-    Genera il bracket dai gironi.
-    Supporta configurazione: quante squadre passano per girone.
-    Genera automaticamente: Quarti/Semifinali + Finale 1-2 + Finale 3-4.
+    Genera il bracket dai gironi con tabelloni federali standard.
+
+    Logica BYE:
+    - Si calcola il numero di squadre qualificate reali.
+    - Si trova il tabellone standard (potenza di 2) più piccolo >= qualificate.
+    - Si aggiungono BYE per completare il tabellone.
+    - I BYE vengono assegnati alle migliori squadre per ranking (top seeds),
+      così le prime classificate avanzano automaticamente al turno successivo
+      come avviene nelle competizioni federali FIPAV/FIVB.
     """
+    # 1. Raccogli qualificate ordinate per ranking di girone
+    #    (prima la prima del girone A, poi la prima del girone B, ecc.
+    #     poi le seconde, poi le terze...)
+    max_passano = squadre_per_girone_passano
+    posizioni_per_rango = {}  # rango (0=prima, 1=seconda...) -> lista squadre in ordine
+    for pos in range(max_passano):
+        posizioni_per_rango[pos] = []
+        for g in gironi:
+            if state:
+                classifica = classifica_girone(state, g)
+                reali = [sq for sq in classifica if not sq.get("is_ghost")]
+                if pos < len(reali):
+                    posizioni_per_rango[pos].append(reali[pos]["id"])
+            else:
+                if pos < len(g["squadre"]):
+                    posizioni_per_rango[pos].append(g["squadre"][pos])
+
+    # Lista finale qualificate: prima tutte le prime, poi tutte le seconde, ecc.
     qualificate = []
-    for g in gironi:
-        if state:
-            classifica = classifica_girone(state, g)
-            top = [sq["id"] for sq in classifica[:squadre_per_girone_passano] if not sq.get("is_ghost")]
-        else:
-            top = g["squadre"][:squadre_per_girone_passano]
-        qualificate.extend(top)
-
-    # Rimuovi duplicati mantenendo ordine
     seen = set()
-    qualificate_unique = []
-    for q in qualificate:
-        if q not in seen:
-            seen.add(q)
-            qualificate_unique.append(q)
+    for pos in range(max_passano):
+        for sid in posizioni_per_rango[pos]:
+            if sid not in seen:
+                seen.add(sid)
+                qualificate.append(sid)
 
-    # Assicura numero pari con ghost se necessario
-    if state is not None:
-        while len(qualificate_unique) % 2 != 0 and len(qualificate_unique) > 1:
-            ghost_num = sum(1 for sq in state["squadre"] if sq.get("is_ghost"))
-            ghost_sq = new_squadra(f"👻 BYE-PO {ghost_num+1}", [], quota_pagata=0.0, is_ghost=True)
+    n_reali = len(qualificate)
+    if n_reali == 0:
+        return []
+
+    # 2. Calcola bracket size e numero BYE necessari
+    bracket_size = _bracket_size_from_n(n_reali)
+    n_bye = bracket_size - n_reali
+
+    # 3. Crea squadre BYE (ghost) e aggiungile allo state
+    bye_ids = []
+    if state is not None and n_bye > 0:
+        # Rimuovi eventuali vecchi BYE-playoff
+        state["squadre"] = [sq for sq in state["squadre"]
+                            if not (sq.get("is_ghost") and "BYE-PO" in sq.get("nome",""))]
+        for i in range(n_bye):
+            ghost_sq = new_squadra(f"👻 BYE {i+1}", [], quota_pagata=0.0, is_ghost=True)
+            ghost_sq["nome"] = f"👻 BYE {i+1}"
             state["squadre"].append(ghost_sq)
-            qualificate_unique.append(ghost_sq["id"])
+            bye_ids.append(ghost_sq["id"])
 
+    # 4. Costruisci il tabellone incrociato (seeding federale):
+    #    I BYE vengono assegnati alle prime squadre del ranking (top seeds).
+    #    Posizione 1 (top seed) affronta BYE → avanza senza giocare.
+    #    Schema: seed 1 vs BYE, seed 2 vs BYE, ..., poi le restanti si sfidano.
+    #
+    #    Il tabellone ha bracket_size // 2 partite al primo turno.
+    #    Costruiamo il seeding: interleave qualificate e BYE in modo che
+    #    i BYE cadano sulle posizioni alte del bracket (top seeds).
+    #
+    #    seeded_list: [sq1, sq2, ..., sqN, BYE1, BYE2, ...]
+    #    ma distribuiamo i BYE nelle posizioni basse del bracket
+    #    (le squadre in fondo affrontano i BYE, non i top seed).
+    #
+    #    Convenzione FIVB: i BYE si mettono in fondo al seeding,
+    #    quindi le ultime posizioni del bracket affrontano i BYE.
+    #    I top seed affrontano le squadre peggiori (o BYE).
+    #
+    #    Bracket standard a eliminazione singola:
+    #    partita 1: seed 1 vs seed (bracket_size)
+    #    partita 2: seed 2 vs seed (bracket_size - 1)  ...ecc.
+    #
+    seeded = qualificate + bye_ids  # qualificate prima (meglio ranked), BYE in fondo
+    # Assicura esattamente bracket_size squadre
+    while len(seeded) < bracket_size:
+        if state is not None:
+            ghost_sq = new_squadra(f"👻 BYE X", [], quota_pagata=0.0, is_ghost=True)
+            state["squadre"].append(ghost_sq)
+            seeded.append(ghost_sq["id"])
+        else:
+            seeded.append(None)
+
+    seeded = seeded[:bracket_size]
+
+    # 5. Genera le partite del primo turno
+    #    seed 1 vs seed N, seed 2 vs seed N-1, ...
     bracket = []
-    # Genera partite incrociando teste di serie (1° girone A vs 2° girone B, ecc.)
-    n = len(qualificate_unique)
-    # Cerca di fare un bracket sensato
-    metà = n // 2
-    for i in range(metà):
-        sq1 = qualificate_unique[i]
-        sq2 = qualificate_unique[n - 1 - i]
-        bracket.append(new_partita(sq1, sq2, "eliminazione"))
+    half = bracket_size // 2
+    for i in range(half):
+        sq1 = seeded[i]
+        sq2 = seeded[bracket_size - 1 - i]
+        if sq1 and sq2:
+            p = new_partita(sq1, sq2, "eliminazione")
+            # Se una delle due è BYE, marca come auto-win
+            sq1_data = get_squadra_by_id(state, sq1) if state else None
+            sq2_data = get_squadra_by_id(state, sq2) if state else None
+            if sq2_data and sq2_data.get("is_ghost"):
+                p["squadra1_score"] = 1
+                p["squadra2_score"] = 0
+                p["vincitore"]  = sq1
+                p["perdente"]   = sq2
+                p["confermata"] = True
+                p["is_bye"]     = True
+            elif sq1_data and sq1_data.get("is_ghost"):
+                p["squadra1_score"] = 0
+                p["squadra2_score"] = 1
+                p["vincitore"]  = sq2
+                p["perdente"]   = sq1
+                p["confermata"] = True
+                p["is_bye"]     = True
+            bracket.append(p)
+
+    # 6. Salva metadati bracket nello state
+    if state is not None:
+        state["torneo"]["bracket_size"]     = bracket_size
+        state["torneo"]["n_bye_playoff"]    = n_bye
+        state["torneo"]["n_qualificate_playoff"] = n_reali
 
     return bracket
