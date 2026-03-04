@@ -81,23 +81,11 @@ def render_setup(state):
                 state["torneo"]["squadre_per_girone_passano"] = int(squadre_passano)
 
                 # ── Calcolo tabellone eliminatorio e BYE ─────────────────
+                from data_manager import _bracket_size_from_n, BRACKET_ROUND_NAMES
                 qualificate_totali = int(squadre_passano) * num_gironi
-                BRACKET_SIZES = [2, 4, 8, 16, 32, 64, 128]
-                BRACKET_NAMES = {
-                    2:   "Finale 1°/2° posto",
-                    4:   "Semifinali",
-                    8:   "Quarti di Finale",
-                    16:  "Ottavi di Finale",
-                    32:  "Sedicesimi di Finale",
-                    64:  "Trentaduesimi di Finale",
-                    128: "Sessantaquattresimi di Finale",
-                }
-                bracket_size = next(
-                    (s for s in BRACKET_SIZES if s >= qualificate_totali),
-                    BRACKET_SIZES[-1]
-                )
-                n_bye = bracket_size - qualificate_totali
-                stato_bracket = BRACKET_NAMES.get(bracket_size, str(bracket_size) + " squadre")
+                bracket_size  = _bracket_size_from_n(qualificate_totali)
+                n_bye         = bracket_size - qualificate_totali
+                stato_bracket = BRACKET_ROUND_NAMES.get(bracket_size, str(bracket_size) + " sq.")
                 state["torneo"]["bracket_size"]     = bracket_size
                 state["torneo"]["n_bye_playoff"]    = n_bye
                 state["torneo"]["fase_partenza_eliminatoria"] = stato_bracket
@@ -198,15 +186,10 @@ def render_setup(state):
         qualificate_totali = passano * num_gironi
 
         # Calcola bracket e BYE
-        BRACKET_SIZES = [2, 4, 8, 16, 32, 64, 128]
-        BRACKET_NAMES = {
-            2: "Finale 1°/2°", 4: "Semifinali", 8: "Quarti di Finale",
-            16: "Ottavi di Finale", 32: "Sedicesimi", 64: "Trentaduesimi",
-            128: "Sessantaquattresimi",
-        }
-        bracket_size = next((s for s in BRACKET_SIZES if s >= qualificate_totali), BRACKET_SIZES[-1])
+        from data_manager import _bracket_size_from_n, BRACKET_ROUND_NAMES
+        bracket_size = _bracket_size_from_n(qualificate_totali)
         n_bye        = bracket_size - qualificate_totali
-        bracket_name = BRACKET_NAMES.get(bracket_size, str(bracket_size) + " sq.")
+        bracket_name = BRACKET_ROUND_NAMES.get(bracket_size, str(bracket_size) + " sq.")
 
         bye_html = (
             f' · <strong style="color:#00c851">{n_bye} BYE</strong>'
@@ -257,8 +240,8 @@ def render_setup(state):
                 # (se non presenti usa calcolo rapido)
                 passano_pg     = state["torneo"].get("squadre_per_girone_passano", 2)
                 qualif_tot     = int(passano_pg) * num_gironi
-                _BSIZES        = [2, 4, 8, 16, 32, 64, 128]
-                b_size         = next((s for s in _BSIZES if s >= qualif_tot), _BSIZES[-1])
+                from data_manager import _bracket_size_from_n as _bsn
+                b_size         = _bsn(qualif_tot)
                 n_bye_auto     = b_size - qualif_tot
                 state["torneo"]["bracket_size"]  = b_size
                 state["torneo"]["n_bye_playoff"] = n_bye_auto
