@@ -69,14 +69,60 @@ def _migrate(data):
     if "modalita" not in t: t["modalita"] = "Gironi + Playoff"
     return data
 
+def _estrai_copertine(state):
+    """
+    Separa le copertine base64 dai tornei programmati.
+    Ritorna (state_leggero, dict_copertine).
+    Le copertine vengono salvate separatamente perché sono molto grandi.
+    """
+    import copy
+    state_light = copy.deepcopy(state)
+    copertine = {}
+    for t in state_light.get("tornei_programmati", []):
+        tid = t.get("id", "")
+        if t.get("copertina_b64"):
+            copertine[tid] = t["copertina_b64"]
+            t["copertina_b64"] = None  # rimuovi dalla copia leggera
+    # Stessa cosa per foto atleti
+    for a in state_light.get("atleti", []):
+        aid = a.get("id", "")
+        if a.get("foto_b64"):
+            copertine["foto_" + aid] = a["foto_b64"]
+            a["foto_b64"] = None
+    return state_light, copertine
+
+
+def _reinserisci_copertine(state, copertine):
+    """Reinserisce le copertine nel state dopo il caricamento."""
+    for t in state.get("tornei_programmati", []):
+        tid = t.get("id", "")
+        if tid in copertine:
+            t["copertina_b64"] = copertine[tid]
+    for a in state.get("atleti", []):
+        aid = a.get("id", "")
+        k = "foto_" + aid
+        if k in copertine:
+            a["foto_b64"] = copertine[k]
+    return state
+
+
+def _save_local(state):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
 def load_state():
     # 1. Prova Google Sheets
     sheet = _get_gsheet()
     if sheet is not None:
         try:
-            val = sheet.cell(2, 1).value
-            if val:
-                data = json.loads(val)
+            val_main = sheet.cell(2, 1).value
+            val_covers = sheet.cell(2, 3).value  # copertine in colonna C
+            if val_main:
+                data = json.loads(val_main)
+                if val_covers:
+                    copertine = json.loads(val_covers)
+                    data = _reinserisci_copertine(data, copertine)
                 return _migrate(data)
         except Exception as e:
             st.warning(f"⚠️ Errore lettura Sheets, uso file locale. ({e})")
@@ -89,21 +135,29 @@ def load_state():
 
     return empty_state()
 
+
 def save_state(state):
-    # 1. Salva su Google Sheets
     sheet = _get_gsheet()
     if sheet is not None:
         try:
-            sheet.update("A1", [["data"], [json.dumps(state, ensure_ascii=False)]])
+            # Separa i dati pesanti (immagini) da quelli leggeri
+            state_light, copertine = _estrai_copertine(state)
+            main_json    = json.dumps(state_light, ensure_ascii=False)
+            covers_json  = json.dumps(copertine,   ensure_ascii=False)
+
+            # Salva dati principali in A2, copertine in C2
+            sheet.update("A1", [["data"],   [main_json]])
+            if copertine:
+                sheet.update("C1", [["covers"], [covers_json]])
+
+            # Salva anche in locale come backup silenzioso
+            _save_local(state)
+            return
         except Exception as e:
             st.warning(f"⚠️ Errore salvataggio Sheets, salvo in locale. ({e})")
-            # Fallback locale
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
-    else:
-        # Fallback locale
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
+
+    # Fallback locale
+    _save_local(state)
 
 def new_atleta(nome, cognome=""):
     full_name = f"{nome} {cognome}".strip() if cognome else nome
