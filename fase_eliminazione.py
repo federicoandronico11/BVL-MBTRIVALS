@@ -142,9 +142,31 @@ def _check_e_genera_prossimi_round(state):
         r = p.get("round", "⚡ Playoff")
         rounds.setdefault(r, []).append(p)
 
-    round_order = ["🏅 Quarti di Finale", "🥇 Semifinali", "⚡ Playoff"]
+    # Ordine round dal più ampio al più piccolo (progressione federale)
+    from data_manager import BRACKET_ROUND_NAMES
+    # round_order: dal tabellone più grande verso le semifinali
+    # I BYE sono già confermati, quindi i round con tutti BYE vengono saltati
+    full_order = [
+        "⚡ Sessantaquattresimi di Finale",
+        "⚡ Trentaduesimi di Finale",
+        "⚡ Sedicesimi di Finale",
+        "🏅 Ottavi di Finale",
+        "🏅 Quarti di Finale",
+        "🥇 Semifinali",
+        "⚡ Playoff",
+    ]
+    ROUND_SUCCESSIVO = {
+        "⚡ Sessantaquattresimi di Finale": "⚡ Trentaduesimi di Finale",
+        "⚡ Trentaduesimi di Finale":       "⚡ Sedicesimi di Finale",
+        "⚡ Sedicesimi di Finale":           "🏅 Ottavi di Finale",
+        "🏅 Ottavi di Finale":               "🏅 Quarti di Finale",
+        "🏅 Quarti di Finale":               "🥇 Semifinali",
+        "🥇 Semifinali":                     None,  # → finali separate
+        "⚡ Playoff":                         None,  # → finali separate
+    }
+    ROUND_FINALE = {"🥇 Semifinali", "⚡ Playoff"}
 
-    for i, r_name in enumerate(round_order):
+    for r_name in full_order:
         if r_name not in rounds:
             continue
         partite_round = rounds[r_name]
@@ -152,22 +174,33 @@ def _check_e_genera_prossimi_round(state):
         if not tutti_confermati:
             break
 
-        # Controlla se esiste già il round successivo
-        next_round = None
-        if r_name == "🏅 Quarti di Finale":
-            next_round = "🥇 Semifinali"
-        elif r_name == "🥇 Semifinali" or r_name == "⚡ Playoff":
-            # Genera finale 3-4 e finale 1-2 se non esistono ancora
+        if r_name in ROUND_FINALE:
             _genera_finali_da_semifinali(state, partite_round)
             return
 
+        next_round = ROUND_SUCCESSIVO.get(r_name)
         if next_round and next_round not in rounds:
-            vincitori = [p["vincitore"] for p in partite_round]
+            # Raccogli solo i vincitori delle partite NON-BYE per il round successivo
+            # (le partite BYE sono già confermate e il vincitore avanza automaticamente)
+            vincitori = [p["vincitore"] for p in partite_round if p.get("vincitore")]
             nuove_partite = []
             for j in range(0, len(vincitori), 2):
                 if j + 1 < len(vincitori):
-                    np = new_partita(vincitori[j], vincitori[j+1], "eliminazione")
+                    sq1_id = vincitori[j]
+                    sq2_id = vincitori[j+1]
+                    np = new_partita(sq1_id, sq2_id, "eliminazione")
                     np["round"] = next_round
+                    # Se uno dei due è ancora una ghost/BYE, auto-win
+                    sq1_data = get_squadra_by_id(state, sq1_id)
+                    sq2_data = get_squadra_by_id(state, sq2_id)
+                    if sq2_data and sq2_data.get("is_ghost"):
+                        np["squadra1_score"] = 1; np["squadra2_score"] = 0
+                        np["vincitore"] = sq1_id; np["perdente"] = sq2_id
+                        np["confermata"] = True;  np["is_bye"] = True
+                    elif sq1_data and sq1_data.get("is_ghost"):
+                        np["squadra1_score"] = 0; np["squadra2_score"] = 1
+                        np["vincitore"] = sq2_id; np["perdente"] = sq1_id
+                        np["confermata"] = True;  np["is_bye"] = True
                     nuove_partite.append(np)
             bracket.extend(nuove_partite)
             save_state(state)
