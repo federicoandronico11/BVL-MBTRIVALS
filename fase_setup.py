@@ -60,8 +60,8 @@ def render_setup(state):
                 num_gironi_val = min(num_gironi_val, max_gironi)
                 num_gironi = st.select_slider(
                     "Numero di Gironi",
-                    options=list(range(1, min(max_gironi+1, 9))),
-                    value=max(1, min(num_gironi_val, 8)),
+                    options=list(range(1, min(max_gironi+1, 21))),
+                    value=max(1, min(num_gironi_val, 20)),
                     help="Quanti gironi dividere le squadre"
                 )
                 state["torneo"]["num_gironi"] = num_gironi
