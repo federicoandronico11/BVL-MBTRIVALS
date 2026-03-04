@@ -109,23 +109,99 @@ def _render_lista_tornei_admin(state):
         n_iscr   = len(iscritti)
         tid      = torneo.get("id","")
 
-        col_a, col_b, col_c, col_d = st.columns([3,2,1,1])
+        col_a, col_b, col_c, col_d, col_e, col_f = st.columns([3,2,1,1,1,1])
         with col_a:
             icon = "🟢" if attivo else "🔴"
             st.markdown(icon + " **" + nome + "**  \n" + "📅 " + data_t + "  ·  👥 " + str(n_iscr) + " iscritti")
         with col_b:
             st.markdown("📍 " + luogo + "  \n💶 €" + str(torneo.get("quota",0)))
         with col_c:
-            if st.button("✏️ Modifica", key="edit_" + tid, use_container_width=True, type="primary"):
+            if st.button("✏️", key="edit_" + tid, use_container_width=True, type="primary", help="Modifica torneo"):
                 st.session_state.admin_edit_torneo_id = tid
                 st.rerun()
         with col_d:
-            tog_lbl = "Off" if attivo else "On"
-            if st.button(tog_lbl, key="tog_" + tid, use_container_width=True):
+            tog_lbl = "👁️ Off" if attivo else "👁️ On"
+            if st.button(tog_lbl, key="tog_" + tid, use_container_width=True, help="Attiva/disattiva visibilità"):
                 torneo["attivo"] = not attivo
                 save_state(state)
                 st.rerun()
+        with col_e:
+            if st.button("🚀 Avvia", key="avvia_" + tid, use_container_width=True, help="Avvia il torneo nel Setup"):
+                _avvia_torneo(state, torneo)
+        with col_f:
+            if st.button("🗑️", key="del_lista_" + tid, use_container_width=True, help="Elimina torneo"):
+                st.session_state["conferma_del_" + tid] = True
+                st.rerun()
+
+        # Conferma eliminazione
+        if st.session_state.get("conferma_del_" + tid):
+            st.warning("⚠️ Sei sicuro di voler eliminare **" + nome + "**? Questa operazione non è reversibile.")
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("✅ Sì, elimina", key="yes_del_" + tid, use_container_width=True):
+                    state["tornei_programmati"].remove(torneo)
+                    save_state(state)
+                    st.session_state.pop("conferma_del_" + tid, None)
+                    st.success("Torneo eliminato.")
+                    st.rerun()
+            with col_no:
+                if st.button("❌ Annulla", key="no_del_" + tid, use_container_width=True):
+                    st.session_state.pop("conferma_del_" + tid, None)
+                    st.rerun()
+
         st.markdown('<hr style="border-color:#1a1a2a;margin:6px 0">', unsafe_allow_html=True)
+
+
+
+def _avvia_torneo(state, torneo):
+    """Copia i dati del torneo programmato nel setup e porta alla fase setup."""
+    from data_manager import empty_state
+    
+    # Preleva dati dal torneo programmato
+    t = state["torneo"]
+    t["nome"]             = torneo.get("nome_programmato", "")
+    t["data"]             = _converti_data(torneo.get("data_programmata", ""))
+    t["formato_set"]      = torneo.get("formato_set", "Set Unico")
+    t["punteggio_max"]    = torneo.get("punteggio_max", 21)
+    t["modalita"]         = torneo.get("tipo_tabellone", "Gironi + Playoff")
+    t["tipo_tabellone"]   = torneo.get("tipo_tabellone", "Gironi + Playoff")
+
+    # Precarica iscritti come atleti se non esistono già
+    iscritti = torneo.get("iscritti", [])
+    atleti_esistenti = {a["nome"].lower() for a in state.get("atleti", [])}
+    for entry in iscritti:
+        if isinstance(entry, dict):
+            nome_atl = entry.get("nome", "").strip()
+            if nome_atl and nome_atl.lower() not in atleti_esistenti:
+                from data_manager import new_atleta
+                state["atleti"].append(new_atleta(nome_atl))
+                atleti_esistenti.add(nome_atl.lower())
+
+    # Porta alla fase setup
+    state["fase"] = "setup"
+    state["gironi"] = []
+    state["bracket"] = []
+    state["bracket_extra"] = []
+    state["squadre"] = []
+    state["vincitore"] = None
+    state["podio"] = []
+
+    # Segnale per il setup: mostra banner di avvio torneo
+    st.session_state["torneo_avviato_da"] = torneo.get("nome_programmato", "")
+    st.session_state["avvia_torneo_mode"] = True
+
+    from data_manager import save_state
+    save_state(state)
+    st.success("🚀 Torneo **" + torneo.get("nome_programmato","") + "** caricato nel Setup! Puoi fare ulteriori modifiche prima di iniziare.")
+    st.rerun()
+
+
+def _converti_data(data_str):
+    """Converte data da dd/mm/yyyy a yyyy-mm-dd per il campo data del torneo."""
+    try:
+        return datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except Exception:
+        return data_str
 
 
 def _render_editor_torneo(torneo, state):
@@ -533,6 +609,11 @@ def _render_dettaglio_torneo(torneo, user, state):
     _info_box_gold(col_i3, "💶", "Quota", "€" + str(quota))
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ── METEO ────────────────────────────────────────────────────────────────
+    _render_meteo(luogo, data_t)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         st.markdown(
@@ -614,6 +695,128 @@ def _render_dettaglio_torneo(torneo, user, state):
             st.rerun()
 
     _render_lista_iscritti(iscritti)
+
+
+
+def _render_meteo(luogo, data_torneo):
+    """Mostra meteo reale tramite Open-Meteo (gratuito, no API key)."""
+    import urllib.request
+    import urllib.parse
+    import json as _json
+    from datetime import datetime as _dt
+
+    st.markdown(
+        '<div style="color:#e8002d;font-size:0.65rem;letter-spacing:2px;'
+        'text-transform:uppercase;font-weight:700;margin-bottom:8px">🌤️ Meteo</div>',
+        unsafe_allow_html=True
+    )
+
+    try:
+        # 1. Geocoding: converti nome luogo in coordinate tramite Open-Meteo geocoding
+        luogo_enc = urllib.parse.quote(luogo.split(",")[0].strip())
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={luogo_enc}&count=1&language=it&format=json"
+        with urllib.request.urlopen(geo_url, timeout=5) as resp:
+            geo_data = _json.loads(resp.read())
+
+        results = geo_data.get("results", [])
+        if not results:
+            st.caption("📍 Luogo non trovato per il meteo.")
+            return
+
+        lat  = results[0]["latitude"]
+        lon  = results[0]["longitude"]
+        city = results[0].get("name", luogo)
+
+        # 2. Meteo attuale + previsioni
+        weather_url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m"
+            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
+            f"&timezone=Europe%2FRome&forecast_days=7"
+        )
+        with urllib.request.urlopen(weather_url, timeout=5) as resp:
+            w = _json.loads(resp.read())
+
+        cur  = w.get("current", {})
+        daily = w.get("daily", {})
+
+        temp     = cur.get("temperature_2m", "—")
+        wcode    = cur.get("weathercode", 0)
+        wind     = cur.get("windspeed_10m", "—")
+        humidity = cur.get("relativehumidity_2m", "—")
+
+        def wcode_to_emoji(c):
+            if c == 0:   return "☀️", "Sereno"
+            if c <= 3:   return "🌤️", "Poco nuvoloso"
+            if c <= 48:  return "☁️", "Nuvoloso/Nebbia"
+            if c <= 67:  return "🌧️", "Pioggia"
+            if c <= 77:  return "🌨️", "Neve"
+            if c <= 82:  return "🌦️", "Rovesci"
+            return "⛈️", "Temporale"
+
+        emoji, desc = wcode_to_emoji(wcode)
+
+        # Card meteo attuale
+        st.markdown(
+            f'<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:12px;padding:16px 20px;margin-bottom:10px">'
+            f'<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+            f'<div style="font-size:3rem">{emoji}</div>'
+            f'<div>'
+            f'<div style="font-size:1.6rem;font-weight:900;color:#fff">{temp}°C</div>'
+            f'<div style="color:#888;font-size:0.8rem">{desc} · 📍 {city}</div>'
+            f'</div>'
+            f'<div style="margin-left:auto;text-align:right;font-size:0.78rem;color:#888;line-height:2">'
+            f'💨 Vento: <strong style="color:#ccc">{wind} km/h</strong><br>'
+            f'💧 Umidità: <strong style="color:#ccc">{humidity}%</strong>'
+            f'</div>'
+            f'</div></div>',
+            unsafe_allow_html=True
+        )
+
+        # Previsioni 5 giorni
+        dates   = daily.get("time", [])[:5]
+        codes   = daily.get("weathercode", [])[:5]
+        t_max   = daily.get("temperature_2m_max", [])[:5]
+        t_min   = daily.get("temperature_2m_min", [])[:5]
+        precip  = daily.get("precipitation_sum", [])[:5]
+
+        # Evidenzia il giorno del torneo se possibile
+        try:
+            data_torneo_fmt = _dt.strptime(data_torneo, "%d/%m/%Y").strftime("%Y-%m-%d")
+        except Exception:
+            data_torneo_fmt = None
+
+        giorni_ita = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]
+        cols = st.columns(len(dates))
+        for i, (d, c, tmax, tmin, pr) in enumerate(zip(dates, codes, t_max, t_min, precip)):
+            em, _ = wcode_to_emoji(c)
+            try:
+                dt_obj = _dt.strptime(d, "%Y-%m-%d")
+                giorno = giorni_ita[dt_obj.weekday()] + " " + dt_obj.strftime("%d/%m")
+            except Exception:
+                giorno = d
+            is_torneo = (d == data_torneo_fmt)
+            border = "2px solid #e8002d" if is_torneo else "1px solid #2a2a3a"
+            badge  = '<div style="font-size:0.6rem;color:#e8002d;font-weight:700;text-transform:uppercase;letter-spacing:1px">🏐 Torneo</div>' if is_torneo else ""
+            with cols[i]:
+                st.markdown(
+                    f'<div style="background:#13131a;border:{border};border-radius:10px;'
+                    f'padding:10px 6px;text-align:center">'
+                    f'{badge}'
+                    f'<div style="font-size:0.7rem;color:#888;margin-bottom:4px">{giorno}</div>'
+                    f'<div style="font-size:1.4rem">{em}</div>'
+                    f'<div style="font-size:0.8rem;font-weight:700;color:#fff">{tmax:.0f}°</div>'
+                    f'<div style="font-size:0.7rem;color:#888">{tmin:.0f}°</div>'
+                    + (f'<div style="font-size:0.65rem;color:#4af">💧{pr:.1f}mm</div>' if pr and pr > 0 else '')
+                    + '</div>',
+                    unsafe_allow_html=True
+                )
+
+        st.caption("Dati meteo: Open-Meteo.com · Aggiornati in tempo reale")
+
+    except Exception as e:
+        st.caption(f"⚠️ Meteo non disponibile al momento. ({e})")
 
 
 def _render_lista_iscritti(iscritti):
