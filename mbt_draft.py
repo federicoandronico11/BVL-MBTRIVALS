@@ -744,7 +744,69 @@ def render_limited_card_html(card_data, size="normal", show_effects=True):
 DRAFT_DB_FILE = "mbt_draft_cards.json"
 
 
+# ── Google Sheets helpers per Draft ──────────────────────────────────────────
+# Chiave usata nel foglio:
+#   draft_db_meta        → carte draft/limited senza foto
+#   foto_draft:<id>_... → foto di ogni carta draft (una riga per carta)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _draft_sheet_write(updates: dict):
+    try:
+        from data_manager import _get_gsheet, _sheet_write
+        sheet = _get_gsheet()
+        if sheet:
+            _sheet_write(sheet, updates)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _draft_sheet_read_all():
+    try:
+        from data_manager import _get_gsheet, _sheet_read_all
+        sheet = _get_gsheet()
+        if sheet:
+            return _sheet_read_all(sheet)
+    except Exception:
+        pass
+    return {}
+
+
+def _strip_foto_draft(db):
+    import copy
+    db_light = copy.deepcopy(db)
+    foto = {}
+    for card in db_light.get("cards", []):
+        cid = str(card.get("id", ""))
+        for campo in ("foto_path_b64", "card_png_b64", "foto_b64"):
+            if card.get(campo):
+                foto[f"foto_draft:{cid}_{campo}"] = card[campo]
+                card[campo] = None
+    return db_light, foto
+
+
+def _restore_foto_draft(db, store):
+    for card in db.get("cards", []):
+        cid = str(card.get("id", ""))
+        for campo in ("foto_path_b64", "card_png_b64", "foto_b64"):
+            k = f"foto_draft:{cid}_{campo}"
+            if k in store:
+                card[campo] = store[k]
+    return db
+
+
 def load_draft_db():
+    store = _draft_sheet_read_all()
+    if store:
+        val = store.get("draft_db_meta")
+        if val:
+            try:
+                db = json.loads(val)
+                db = _restore_foto_draft(db, store)
+                return db
+            except Exception:
+                pass
     if Path(DRAFT_DB_FILE).exists():
         with open(DRAFT_DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -752,6 +814,10 @@ def load_draft_db():
 
 
 def save_draft_db(db):
+    db_light, foto = _strip_foto_draft(db)
+    updates = {"draft_db_meta": json.dumps(db_light, ensure_ascii=False)}
+    updates.update(foto)
+    _draft_sheet_write(updates)
     with open(DRAFT_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
 
