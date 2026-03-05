@@ -69,41 +69,78 @@ def _migrate(data):
     if "modalita" not in t: t["modalita"] = "Gironi + Playoff"
     return data
 
-def _estrai_copertine(state):
-    """
-    Separa le copertine base64 dai tornei programmati.
-    Ritorna (state_leggero, dict_copertine).
-    Le copertine vengono salvate separatamente perché sono molto grandi.
-    """
-    import copy
-    state_light = copy.deepcopy(state)
-    copertine = {}
-    for t in state_light.get("tornei_programmati", []):
-        tid = t.get("id", "")
-        if t.get("copertina_b64"):
-            copertine[tid] = t["copertina_b64"]
-            t["copertina_b64"] = None  # rimuovi dalla copia leggera
-    # Stessa cosa per foto atleti
-    for a in state_light.get("atleti", []):
-        aid = a.get("id", "")
-        if a.get("foto_b64"):
-            copertine["foto_" + aid] = a["foto_b64"]
-            a["foto_b64"] = None
-    return state_light, copertine
+# ─────────────────────────────────────────────────────────────────────────────
+# SISTEMA PERSISTENZA A RIGHE CHIAVE-VALORE
+# Il foglio Google Sheets ha due colonne: A=chiave, B=valore
+# Ogni dato occupa una riga propria → nessuna cella supera mai 50k caratteri
+# Struttura righe:
+#   main_data          → dati torneo beach volley (senza immagini)
+#   incassi            → dati incassi
+#   cover:<tid>        → copertina torneo (una riga per torneo)
+#   foto_atleta:<aid>  → foto atleta (una riga per atleta)
+#   rivals_data        → dati giocatore Rivals
+#   cards_db_meta      → carte Rivals senza foto
+#   foto_card:<id>     → foto di una carta Rivals (una riga per carta)
+#   draft_db_meta      → carte Draft/Limited senza foto
+# ─────────────────────────────────────────────────────────────────────────────
+
+import copy as _copy
+
+def _sheet_read_all(sheet):
+    """Legge tutte le righe e ritorna un dict {chiave: valore}."""
+    try:
+        rows = sheet.get_all_values()
+        result = {}
+        for row in rows:
+            if len(row) >= 2 and row[0] and row[1]:
+                result[row[0]] = row[1]
+        return result
+    except Exception:
+        return {}
 
 
-def _reinserisci_copertine(state, copertine):
-    """Reinserisce le copertine nel state dopo il caricamento."""
-    for t in state.get("tornei_programmati", []):
-        tid = t.get("id", "")
-        if tid in copertine:
-            t["copertina_b64"] = copertine[tid]
-    for a in state.get("atleti", []):
-        aid = a.get("id", "")
-        k = "foto_" + aid
-        if k in copertine:
-            a["foto_b64"] = copertine[k]
-    return state
+def _sheet_write(sheet, updates: dict):
+    """
+    Scrive un dict {chiave: valore} nel foglio.
+    Aggiorna le righe esistenti, aggiunge quelle nuove.
+    updates = { "main_data": "..json..", "cover:tp_123": "..b64.." }
+    """
+    if not updates:
+        return
+    try:
+        rows = sheet.get_all_values()
+        # Mappa chiave -> numero riga (1-based)
+        key_to_row = {}
+        for i, row in enumerate(rows, start=1):
+            if row and row[0]:
+                key_to_row[row[0]] = i
+
+        # Prepara le celle da aggiornare o appendere
+        to_update = []   # (row_num, key, value)
+        to_append = []   # [key, value]
+
+        for key, value in updates.items():
+            if key in key_to_row:
+                to_update.append((key_to_row[key], key, value))
+            else:
+                to_append.append([key, value])
+
+        # Aggiorna celle esistenti in batch
+        if to_update:
+            cell_updates = []
+            for row_num, key, value in to_update:
+                cell_updates.append({
+                    "range": f"A{row_num}:B{row_num}",
+                    "values": [[key, value]]
+                })
+            sheet.batch_update(cell_updates)
+
+        # Appendi nuove righe
+        if to_append:
+            sheet.append_rows(to_append, value_input_option="RAW")
+
+    except Exception as e:
+        raise e
 
 
 def _save_local(state):
@@ -111,28 +148,55 @@ def _save_local(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
+def _strip_images_state(state):
+    """Rimuove immagini dal state e le ritorna separate come dict {chiave: b64}."""
+    s = _copy.deepcopy(state)
+    imgs = {}
+    for t in s.get("tornei_programmati", []):
+        tid = t.get("id", "")
+        if t.get("copertina_b64"):
+            imgs[f"cover:{tid}"] = t["copertina_b64"]
+            t["copertina_b64"] = None
+    for a in s.get("atleti", []):
+        aid = a.get("id", "")
+        if a.get("foto_b64"):
+            imgs[f"foto_atleta:{aid}"] = a["foto_b64"]
+            a["foto_b64"] = None
+    return s, imgs
+
+
+def _restore_images_state(state, store):
+    """Reinserisce immagini nel state leggendo dal dict del foglio."""
+    for t in state.get("tornei_programmati", []):
+        tid = t.get("id", "")
+        k = f"cover:{tid}"
+        if k in store:
+            t["copertina_b64"] = store[k]
+    for a in state.get("atleti", []):
+        aid = a.get("id", "")
+        k = f"foto_atleta:{aid}"
+        if k in store:
+            a["foto_b64"] = store[k]
+    return state
+
+
 def load_state():
-    # 1. Prova Google Sheets
     sheet = _get_gsheet()
     if sheet is not None:
         try:
-            val_main = sheet.cell(2, 1).value
-            val_covers = sheet.cell(2, 3).value  # copertine in colonna C
-            if val_main:
-                data = json.loads(val_main)
-                if val_covers:
-                    copertine = json.loads(val_covers)
-                    data = _reinserisci_copertine(data, copertine)
+            store = _sheet_read_all(sheet)
+            val = store.get("main_data")
+            if val:
+                data = json.loads(val)
+                data = _restore_images_state(data, store)
                 return _migrate(data)
         except Exception as e:
             st.warning(f"⚠️ Errore lettura Sheets, uso file locale. ({e})")
 
-    # 2. Fallback: file locale
     if Path(DATA_FILE).exists():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         return _migrate(data)
-
     return empty_state()
 
 
@@ -140,23 +204,14 @@ def save_state(state):
     sheet = _get_gsheet()
     if sheet is not None:
         try:
-            # Separa i dati pesanti (immagini) da quelli leggeri
-            state_light, copertine = _estrai_copertine(state)
-            main_json    = json.dumps(state_light, ensure_ascii=False)
-            covers_json  = json.dumps(copertine,   ensure_ascii=False)
-
-            # Salva dati principali in A2, copertine in C2
-            sheet.update("A1", [["data"],   [main_json]])
-            if copertine:
-                sheet.update("C1", [["covers"], [covers_json]])
-
-            # Salva anche in locale come backup silenzioso
+            s_light, imgs = _strip_images_state(state)
+            updates = {"main_data": json.dumps(s_light, ensure_ascii=False)}
+            updates.update({k: v for k, v in imgs.items()})
+            _sheet_write(sheet, updates)
             _save_local(state)
             return
         except Exception as e:
             st.warning(f"⚠️ Errore salvataggio Sheets, salvo in locale. ({e})")
-
-    # Fallback locale
     _save_local(state)
 
 def new_atleta(nome, cognome=""):
