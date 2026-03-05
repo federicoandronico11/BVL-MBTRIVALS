@@ -487,23 +487,113 @@ RIVALS_CSS = """
 
 # ─── DATA HELPERS ─────────────────────────────────────────────────────────────
 
+# ── Google Sheets helpers per Rivals ─────────────────────────────────────────
+# Usa lo stesso foglio e lo stesso sistema a righe chiave-valore di data_manager
+# Chiavi usate:
+#   rivals_data          → dati giocatore (monete, livello, collezione, team)
+#   cards_db_meta        → tutte le carte senza foto
+#   foto_card:<id>       → foto di ogni carta (una riga per carta)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_rivals_sheet():
+    try:
+        from data_manager import _get_gsheet
+        return _get_gsheet()
+    except Exception:
+        return None
+
+
+def _rivals_sheet_write(updates: dict):
+    sheet = _get_rivals_sheet()
+    if sheet is None:
+        return False
+    try:
+        from data_manager import _sheet_write
+        _sheet_write(sheet, updates)
+        return True
+    except Exception:
+        return False
+
+
+def _rivals_sheet_read_all():
+    sheet = _get_rivals_sheet()
+    if sheet is None:
+        return {}
+    try:
+        from data_manager import _sheet_read_all
+        return _sheet_read_all(sheet)
+    except Exception:
+        return {}
+
+
+def _strip_foto_cards(db):
+    """Rimuove foto dalle carte e le ritorna come dict {foto_card:<id>_<campo>: b64}."""
+    import copy
+    db_light = copy.deepcopy(db)
+    foto = {}
+    for card in db_light.get("cards", []):
+        cid = str(card.get("id", ""))
+        for campo in ("foto_path_b64", "card_png_b64", "foto_b64"):
+            if card.get(campo):
+                foto[f"foto_card:{cid}_{campo}"] = card[campo]
+                card[campo] = None
+    return db_light, foto
+
+
+def _restore_foto_cards(db, store):
+    """Reinserisce le foto nelle carte leggendo dal dict del foglio."""
+    for card in db.get("cards", []):
+        cid = str(card.get("id", ""))
+        for campo in ("foto_path_b64", "card_png_b64", "foto_b64"):
+            k = f"foto_card:{cid}_{campo}"
+            if k in store:
+                card[campo] = store[k]
+    return db
+
+
 def load_rivals_data():
+    store = _rivals_sheet_read_all()
+    if store:
+        val = store.get("rivals_data")
+        if val:
+            try:
+                return json.loads(val)
+            except Exception:
+                pass
     if Path(RIVALS_FILE).exists():
         with open(RIVALS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return empty_rivals_state()
 
+
 def save_rivals_data(data):
+    _rivals_sheet_write({"rivals_data": json.dumps(data, ensure_ascii=False)})
     with open(RIVALS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
 def load_cards_db():
+    store = _rivals_sheet_read_all()
+    if store:
+        val = store.get("cards_db_meta")
+        if val:
+            try:
+                db = json.loads(val)
+                db = _restore_foto_cards(db, store)
+                return db
+            except Exception:
+                pass
     if Path(CARDS_DB_FILE).exists():
         with open(CARDS_DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {"cards": [], "next_id": 1}
 
+
 def save_cards_db(db):
+    db_light, foto = _strip_foto_cards(db)
+    updates = {"cards_db_meta": json.dumps(db_light, ensure_ascii=False)}
+    updates.update(foto)
+    _rivals_sheet_write(updates)
     with open(CARDS_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
 
