@@ -5,7 +5,7 @@ Salvataggio su Google Sheets (colonna B) invece di file JSON locale.
 import streamlit as st
 import json
 from pathlib import Path
-from data_manager import save_state, get_squadra_by_id, get_atleta_by_id, _get_gsheet
+from data_manager import save_state, get_squadra_by_id, get_atleta_by_id
 
 INCASSI_FILE = "beach_volley_incassi.json"
 
