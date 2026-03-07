@@ -214,6 +214,93 @@ def save_state(state):
             st.warning(f"⚠️ Errore salvataggio Sheets, salvo in locale. ({e})")
     _save_local(state)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCHEDULER CAMPI E ORARI
+# Calcola automaticamente campo e orario per ogni partita.
+# Ogni set dura ~20 min. Le partite si distribuiscono sui campi disponibili.
+# ─────────────────────────────────────────────────────────────────────────────
+
+from datetime import datetime as _dt, timedelta as _td
+
+def _minuti_per_partita(formato_set):
+    """Stima durata partita in minuti in base al formato."""
+    if formato_set == "Best of 3":
+        return 60   # 3 set × 20 min
+    if formato_set == "Best of 5":
+        return 100  # 5 set × 20 min
+    return 20       # Set Unico
+
+
+def calcola_schedule(state):
+    """
+    Assegna campo e orario a tutte le partite non ancora confermate.
+    Chiama questa funzione ogni volta che viene confermato un risultato
+    per ricalcolare gli orari delle partite successive.
+    """
+    torneo = state.get("torneo", {})
+    num_campi     = int(torneo.get("num_campi", 1))
+    orario_inizio = torneo.get("orario_inizio", "09:00")
+    formato_set   = torneo.get("formato_set", "Set Unico")
+    data_str      = torneo.get("data", str(_dt.today().date()))
+    durata        = _minuti_per_partita(formato_set)
+
+    try:
+        base_dt = _dt.strptime(f"{data_str} {orario_inizio}", "%Y-%m-%d %H:%M")
+    except Exception:
+        base_dt = _dt.now().replace(hour=9, minute=0, second=0, microsecond=0)
+
+    # Raccoglie tutte le partite in ordine
+    tutte = []
+    for girone in state.get("gironi", []):
+        for p in girone.get("partite", []):
+            tutte.append(p)
+    for p in state.get("bracket", []):
+        tutte.append(p)
+    for p in state.get("bracket_extra", []):
+        tutte.append(p)
+
+    # Dividi in confermate (usate per calcolare il tempo trascorso)
+    # e non confermate (da schedulare)
+    confermate     = [p for p in tutte if p.get("confermata")]
+    non_confermate = [p for p in tutte if not p.get("confermata")]
+
+    # Tieni il cursore orario per ogni campo
+    # Partiamo dalla fine delle partite già confermate
+    cursori = [base_dt] * num_campi
+
+    # Avanza i cursori per le partite già confermate
+    for p in confermate:
+        campo = p.get("campo", 1)
+        if 1 <= campo <= num_campi:
+            idx = campo - 1
+            orario_p = p.get("orario_schedulato", "")
+            if orario_p:
+                try:
+                    p_dt = _dt.strptime(f"{data_str} {orario_p}", "%Y-%m-%d %H:%M")
+                    fine = p_dt + _td(minutes=durata)
+                    if fine > cursori[idx]:
+                        cursori[idx] = fine
+                except Exception:
+                    cursori[idx] += _td(minutes=durata)
+            else:
+                cursori[idx] += _td(minutes=durata)
+
+    # Assegna campo e orario alle partite non confermate
+    for p in non_confermate:
+        # Skip BYE
+        if p.get("is_bye"):
+            continue
+        # Trova il campo disponibile prima (quello con cursore più basso)
+        campo_idx  = cursori.index(min(cursori))
+        orario_dt  = cursori[campo_idx]
+        p["campo"]              = campo_idx + 1
+        p["orario_schedulato"]  = orario_dt.strftime("%H:%M")
+        cursori[campo_idx]     += _td(minutes=durata)
+
+    return state
+
+
 def new_atleta(nome, cognome=""):
     full_name = f"{nome} {cognome}".strip() if cognome else nome
     return {
