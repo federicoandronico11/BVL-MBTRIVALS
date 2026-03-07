@@ -772,18 +772,27 @@ if st.session_state.get("show_bracket_overlay"):
     st.markdown("---")
 
 if st.session_state.segnapunti_open:
-    from segnapunti_live import render_segnapunti_live
-    st.markdown("""
-    <div style="background:linear-gradient(90deg,rgba(232,0,45,0.1),transparent,rgba(232,0,45,0.1));
-        border:1px solid var(--accent1);border-radius:8px;padding:8px 20px;margin-bottom:16px;text-align:center">
-        <span style="font-family:var(--font-display);font-size:0.65rem;letter-spacing:4px;text-transform:uppercase;color:var(--accent1);font-weight:700">
-            🔴 LIVE · SEGNAPUNTI ATTIVO
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-    render_segnapunti_live(state, theme_cfg)
-    st.divider()
-    st.stop()
+    if is_admin or is_atleta:
+        # Admin e Atleta vedono il segnapunti live
+        from segnapunti_live import render_segnapunti_live
+        st.markdown("""
+        <div style="background:linear-gradient(90deg,rgba(232,0,45,0.1),transparent,rgba(232,0,45,0.1));
+            border:1px solid var(--accent1);border-radius:8px;padding:8px 20px;margin-bottom:16px;text-align:center">
+            <span style="font-family:var(--font-display);font-size:0.65rem;letter-spacing:4px;text-transform:uppercase;color:var(--accent1);font-weight:700">
+                🔴 LIVE · SEGNAPUNTI ATTIVO
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        render_segnapunti_live(state, theme_cfg)
+        st.divider()
+        st.stop()
+    else:
+        # Ospite vede la pagina live torneo
+        render_header()
+        from live_ospite import render_live_ospite
+        render_live_ospite(state)
+        render_bottom_nav()
+        st.stop()
 
 # ── Pagine visibili a tutti ──────────────────────────────────────────────────
 
