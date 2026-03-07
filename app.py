@@ -137,7 +137,10 @@ _render_login()
 if "state" not in st.session_state:
     st.session_state.state = load_state()
 if "theme_cfg" not in st.session_state:
-    st.session_state.theme_cfg = load_theme_config()
+    from theme_manager import _restore_theme_images
+    cfg = load_theme_config()
+    cfg = _restore_theme_images(cfg)
+    st.session_state.theme_cfg = cfg
 if "current_page" not in st.session_state:
     st.session_state.current_page = "torneo"
 if "segnapunti_open" not in st.session_state:
