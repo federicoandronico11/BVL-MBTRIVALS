@@ -4,7 +4,7 @@ Include: Quarti → Semifinali → Finale 3°/4° + Finale 1°/2°
 """
 import streamlit as st
 from data_manager import (
-    save_state, simula_partita, aggiorna_classifica_squadra,
+    save_state, simula_partita, aggiorna_classifica_squadra, calcola_schedule,
     get_squadra_by_id, new_partita
 )
 from ui_components import render_match_card
@@ -113,6 +113,7 @@ def _render_scoreboard_playoff(state, partita, key_prefix):
                 partita["vincitore"] = partita["sq1"] if s1v > s2v else partita["sq2"]
                 partita["confermata"] = True
                 aggiorna_classifica_squadra(state, partita)
+                calcola_schedule(state)
                 save_state(state)
                 st.rerun()
         with col_btn2:
