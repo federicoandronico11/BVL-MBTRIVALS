@@ -400,6 +400,19 @@ def render_match_card(state, partita, label=""):
     parziali = " | ".join([f"{p[0]}-{p[1]}" for p in partita["punteggi"]]) if partita["punteggi"] else "—"
     confirmed_class = "confirmed" if partita["confermata"] else ""
     
+    campo   = partita.get("campo")
+    orario  = partita.get("orario_schedulato", "")
+    campo_str = f"🏖️ Campo {campo}" if campo else ""
+    orario_str = f"⏰ {orario}" if orario else ""
+    schedule_html = ""
+    if campo_str or orario_str:
+        schedule_html = (
+            f'<div style="text-align:center;font-size:0.7rem;color:#ffd700;'
+            f'font-weight:700;letter-spacing:1px;padding:3px 0;'
+            f'border-top:1px solid #2a2a3a;margin-top:4px">'
+            f'{campo_str}{"  ·  " if campo_str and orario_str else ""}{orario_str}</div>'
+        )
+
     st.markdown(f"""
     <div class="match-card {confirmed_class}">
         <div class="match-card-header">{label} {'✅ CONFERMATA' if partita["confermata"] else '🔴 LIVE'}</div>
@@ -421,6 +434,7 @@ def render_match_card(state, partita, label=""):
                 <div class="team-players">{players_str(sq2)}</div>
             </div>
         </div>
+        {schedule_html}
     </div>
     """, unsafe_allow_html=True)
 
