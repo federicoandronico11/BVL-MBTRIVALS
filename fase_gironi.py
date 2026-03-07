@@ -5,7 +5,7 @@ auto-BYE, classifica avulsa, scelta quante squadre passano.
 """
 import streamlit as st
 from data_manager import (
-    save_state, simula_partita, aggiorna_classifica_squadra,
+    save_state, simula_partita, aggiorna_classifica_squadra, calcola_schedule,
     get_squadra_by_id, nome_squadra, genera_bracket_da_gironi,
     classifica_girone
 )
@@ -246,6 +246,7 @@ def _render_scoreboard_live(state, partita, key_prefix):
                 partita["vincitore"] = partita["sq1"] if s1v > s2v else partita["sq2"]
                 partita["confermata"] = True
                 aggiorna_classifica_squadra(state, partita)
+                calcola_schedule(state)
                 save_state(state)
                 st.rerun()
         with col_btn2:
