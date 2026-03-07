@@ -199,25 +199,84 @@ SCOREBOARD_STYLES = {
 
 THEME_FILE = "beach_volley_theme.json"
 
+_THEME_DEFAULT = {
+    "theme_name": "Dynamic DAZN",
+    "color_primary": "#e8002d", "color_secondary": "#0070f3", "color_detail": "#ffd700",
+    "logo_b64": None, "logo_name": None,
+    "scoreboard_style": "DAZN Live",
+    "sponsors": [], "banner_b64": None,
+    "banner_position": "Sotto l'header",
+    "sidebar_width": "normale", "card_size": "normale",
+    "show_bottom_nav": True, "show_sponsors_sidebar": True,
+    "header_style": "Grande con gradiente", "animations": True, "show_weather": False,
+}
+
 def load_theme_config():
+    # 1. Prova Google Sheets (chiave: "theme_cfg")
+    try:
+        from data_manager import _get_gsheet, _sheet_read_all
+        sheet = _get_gsheet()
+        if sheet is not None:
+            store = _sheet_read_all(sheet)
+            val = store.get("theme_cfg")
+            if val:
+                cfg = json.loads(val)
+                # Assicura campi mancanti per compatibilità
+                for k, v in _THEME_DEFAULT.items():
+                    cfg.setdefault(k, v)
+                return cfg
+    except Exception:
+        pass
+    # 2. Fallback locale
     if Path(THEME_FILE).exists():
         with open(THEME_FILE, "r") as f:
-            return json.load(f)
-    return {
-        "theme_name": "Dynamic DAZN",
-        "color_primary": "#e8002d", "color_secondary": "#0070f3", "color_detail": "#ffd700",
-        "logo_b64": None, "logo_name": None,
-        "scoreboard_style": "DAZN Live",
-        "sponsors": [], "banner_b64": None,
-        "banner_position": "Sotto l'header",
-        "sidebar_width": "normale", "card_size": "normale",
-        "show_bottom_nav": True, "show_sponsors_sidebar": True,
-        "header_style": "Grande con gradiente", "animations": True, "show_weather": False,
-    }
+            cfg = json.load(f)
+            for k, v in _THEME_DEFAULT.items():
+                cfg.setdefault(k, v)
+            return cfg
+    return _THEME_DEFAULT.copy()
+
 
 def save_theme_config(cfg):
+    # 1. Salva su Google Sheets
+    try:
+        from data_manager import _get_gsheet, _sheet_write
+        sheet = _get_gsheet()
+        if sheet is not None:
+            # Il logo e il banner possono essere grandi: li salviamo separati
+            import copy
+            cfg_light = copy.deepcopy(cfg)
+            extra = {}
+            if cfg_light.get("logo_b64"):
+                extra["theme_logo_b64"] = cfg_light["logo_b64"]
+                cfg_light["logo_b64"] = None
+            if cfg_light.get("banner_b64"):
+                extra["theme_banner_b64"] = cfg_light["banner_b64"]
+                cfg_light["banner_b64"] = None
+            updates = {"theme_cfg": json.dumps(cfg_light, ensure_ascii=False)}
+            updates.update(extra)
+            _sheet_write(sheet, updates)
+    except Exception:
+        pass
+    # 2. Backup locale silenzioso
     with open(THEME_FILE, "w") as f:
         json.dump(cfg, f)
+
+def _restore_theme_images(cfg):
+    """Reinserisce logo e banner nel cfg leggendo dal foglio."""
+    try:
+        from data_manager import _get_gsheet, _sheet_read_all
+        sheet = _get_gsheet()
+        if sheet is not None:
+            store = _sheet_read_all(sheet)
+            if store.get("theme_logo_b64"):
+                cfg["logo_b64"] = store["theme_logo_b64"]
+            if store.get("theme_banner_b64"):
+                cfg["banner_b64"] = store["theme_banner_b64"]
+    except Exception:
+        pass
+    return cfg
+
 
 def get_active_theme(cfg):
     t = THEMES.get(cfg.get("theme_name", "Dynamic DAZN"), THEMES["Dynamic DAZN"]).copy()
