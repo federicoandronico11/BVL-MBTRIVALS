@@ -6,7 +6,7 @@ sistema qualificazione, auto-BYE, ghost squads.
 import streamlit as st
 from data_manager import (
     new_atleta, new_squadra, get_atleta_by_id,
-    save_state, genera_gironi
+    save_state, genera_gironi, calcola_schedule
 )
 
 
@@ -38,6 +38,29 @@ def render_setup(state):
 
         data = st.date_input("Data Torneo")
         state["torneo"]["data"] = str(data)
+
+        # ── Campi e orari ────────────────────────────────────────────────────
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            num_campi = st.number_input(
+                "🏖️ Numero di Campi",
+                min_value=1, max_value=20,
+                value=int(state["torneo"].get("num_campi", 1)),
+                step=1,
+                help="Quanti campi da gioco sono disponibili in parallelo"
+            )
+            state["torneo"]["num_campi"] = int(num_campi)
+        with col_c2:
+            orario_raw = state["torneo"].get("orario_inizio", "09:00")
+            try:
+                from datetime import time as _time
+                h, m = map(int, orario_raw.split(":"))
+                ora_default = _time(h, m)
+            except Exception:
+                from datetime import time as _time
+                ora_default = _time(9, 0)
+            orario_inp = st.time_input("⏰ Orario Inizio Torneo", value=ora_default)
+            state["torneo"]["orario_inizio"] = orario_inp.strftime("%H:%M")
 
         with st.expander("⚙️ Impostazioni Avanzate", expanded=False):
             st.markdown("#### Formato di Gioco")
