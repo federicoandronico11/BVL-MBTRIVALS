@@ -204,6 +204,125 @@ def _converti_data(data_str):
         return data_str
 
 
+
+def _render_tab_squadre_admin(torneo, state, tid):
+    """Gestione completa squadre iscritte al torneo programmato."""
+    torneo.setdefault("squadre_programmate", [])
+    squadre = torneo["squadre_programmate"]
+    tutti_atleti = state.get("atleti", [])
+
+    st.markdown("### 🏐 Squadre Iscritte  (" + str(len(squadre)) + ")")
+
+    # ── Lista squadre esistenti ───────────────────────────────────────────────
+    if not squadre:
+        st.info("Nessuna squadra iscritta. Aggiungine una qui sotto.")
+    else:
+        for idx, sq in enumerate(squadre):
+            nomi = sq.get("nomi_atleti", [])
+            quota = sq.get("quota", 0.0)
+            pagato = sq.get("pagato", False)
+            nome_sq = sq.get("nome", "Squadra " + str(idx+1))
+            border = "#00c851" if pagato else "#e8002d"
+            stato_lbl = "✅ Pagato" if pagato else "⏳ Da pagare"
+
+            with st.expander(
+                f"#{idx+1}  {nome_sq}  —  {' / '.join(nomi)}  —  €{quota:.0f}  {stato_lbl}",
+                expanded=False
+            ):
+                col1, col2 = st.columns(2)
+                with col1:
+                    atl_options = [a["nome"] for a in tutti_atleti]
+                    sel_atl = []
+                    for i_atl in range(2):
+                        cur = nomi[i_atl] if i_atl < len(nomi) else (atl_options[0] if atl_options else "")
+                        idx_cur = atl_options.index(cur) if cur in atl_options else 0
+                        chosen = st.selectbox(
+                            f"Atleta {i_atl+1}",
+                            atl_options,
+                            index=idx_cur,
+                            key=f"sq_atl_{tid}_{idx}_{i_atl}"
+                        )
+                        sel_atl.append(chosen)
+                    nome_auto = " / ".join(sel_atl)
+                    nome_man = st.text_input("Nome Squadra", value=nome_sq, key=f"sq_nome_{tid}_{idx}", placeholder=nome_auto)
+
+                with col2:
+                    new_quota = st.number_input("💶 Quota (€)", min_value=0.0, value=float(quota), step=5.0, key=f"sq_quota_{tid}_{idx}")
+                    new_pagato = st.checkbox("✅ Pagato", value=pagato, key=f"sq_pag_{tid}_{idx}")
+                    note = st.text_input("Note", value=sq.get("note",""), key=f"sq_note_{tid}_{idx}", placeholder="es. bonifico")
+
+                col_sv, col_rm = st.columns(2)
+                with col_sv:
+                    if st.button("💾 Salva", key=f"sq_save_{tid}_{idx}", use_container_width=True, type="primary"):
+                        sq["nomi_atleti"] = sel_atl
+                        sq["nome"] = nome_man.strip() or nome_auto
+                        sq["quota"] = new_quota
+                        sq["pagato"] = new_pagato
+                        sq["note"] = note
+                        # aggiorna anche IDs
+                        sq["atleti_ids"] = [a["id"] for a in tutti_atleti if a["nome"] in sel_atl]
+                        save_state(state)
+                        st.success("Squadra aggiornata!")
+                        st.rerun()
+                with col_rm:
+                    if st.button("🗑️ Rimuovi", key=f"sq_rm_{tid}_{idx}", use_container_width=True):
+                        squadre.pop(idx)
+                        save_state(state)
+                        st.rerun()
+
+    st.divider()
+
+    # ── Aggiungi nuova squadra ────────────────────────────────────────────────
+    st.markdown("#### ➕ Aggiungi Squadra")
+    if not tutti_atleti:
+        st.warning("Nessun atleta registrato nell'app. Aggiungili prima dal Setup Torneo.")
+        return
+
+    atl_options = [a["nome"] for a in tutti_atleti]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        atl1 = st.selectbox("Atleta 1 *", atl_options, key=f"new_sq_a1_{tid}")
+        atl2_opts = [n for n in atl_options if n != atl1]
+        atl2 = st.selectbox("Atleta 2 *", atl2_opts, key=f"new_sq_a2_{tid}") if atl2_opts else None
+        nome_auto_new = f"{atl1} / {atl2}" if atl2 else atl1
+        nome_sq_new = st.text_input("Nome Squadra", placeholder=nome_auto_new, key=f"new_sq_nome_{tid}")
+    with col2:
+        quota_new = st.number_input("💶 Quota (€)", min_value=0.0, value=float(torneo.get("quota", 20.0)), step=5.0, key=f"new_sq_quota_{tid}")
+        pagato_new = st.checkbox("✅ Già pagato", value=False, key=f"new_sq_pag_{tid}")
+        note_new = st.text_input("Note", placeholder="es. bonifico", key=f"new_sq_note_{tid}")
+
+    if st.button("➕ AGGIUNGI SQUADRA", key=f"btn_add_sq_{tid}", use_container_width=True, type="primary"):
+        if not atl2:
+            st.error("Seleziona 2 atleti diversi.")
+        else:
+            atleti_ids = [a["id"] for a in tutti_atleti if a["nome"] in [atl1, atl2]]
+            torneo["squadre_programmate"].append({
+                "id": "sqp_" + str(random.randint(10000,99999)),
+                "nome": nome_sq_new.strip() or nome_auto_new,
+                "nomi_atleti": [atl1, atl2],
+                "atleti_ids": atleti_ids,
+                "quota": quota_new,
+                "pagato": pagato_new,
+                "note": note_new,
+                "data_iscrizione": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            })
+            save_state(state)
+            st.success(f"Squadra **{nome_sq_new or nome_auto_new}** aggiunta!")
+            st.rerun()
+
+    # ── Riepilogo incassi ─────────────────────────────────────────────────────
+    if squadre:
+        st.divider()
+        tot_atteso  = sum(s.get("quota", 0) for s in squadre)
+        tot_pagato  = sum(s.get("quota", 0) for s in squadre if s.get("pagato"))
+        tot_pending = tot_atteso - tot_pagato
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("💰 Totale Atteso",   f"€ {tot_atteso:.2f}")
+        col_b.metric("✅ Incassato",        f"€ {tot_pagato:.2f}", f"{sum(1 for s in squadre if s.get('pagato'))} sq")
+        col_c.metric("⏳ Da Incassare",     f"€ {tot_pending:.2f}", f"{sum(1 for s in squadre if not s.get('pagato'))} sq")
+
+
 def _render_editor_torneo(torneo, state):
     tid = torneo.get("id","")
 
@@ -381,90 +500,7 @@ def _render_editor_torneo(torneo, state):
 
     # ── TAB ISCRITTI ─────────────────────────────────────────────────────────
     with tab_iscritti:
-        iscritti = torneo.get("iscritti",[])
-        st.markdown("### Iscritti al Torneo  (" + str(len(iscritti)) + ")")
-
-        if not iscritti:
-            st.info("Nessun iscritto ancora.")
-        else:
-            for idx, entry in enumerate(iscritti):
-                if isinstance(entry, dict):
-                    en     = entry.get("nome", entry.get("email",""))
-                    email  = entry.get("email","")
-                    comp   = entry.get("compagno_nome","Da definire")
-                    data_i = entry.get("data_iscrizione","")
-                else:
-                    en = email = str(entry); comp = ""; data_i = ""
-
-                with st.expander("#" + str(idx+1) + "  " + en + "  —  compagno: " + (comp or "—"), expanded=False):
-                    col_e1, col_e2, col_e3 = st.columns([2,2,1])
-                    with col_e1:
-                        st.markdown("**Email:** " + email)
-                        st.markdown("**Iscritto il:** " + data_i)
-
-                    tutti_atleti = state.get("atleti",[])
-                    atleti_disp  = [a for a in tutti_atleti if a["nome"].lower() != en.lower()]
-                    opz_comp     = ["Da definire"] + [a["nome"] for a in atleti_disp]
-                    idx_cur = 0
-                    if comp and comp != "Da definire":
-                        try: idx_cur = opz_comp.index(comp)
-                        except ValueError: idx_cur = 0
-
-                    with col_e2:
-                        new_comp = st.selectbox("Compagno", options=opz_comp, index=idx_cur,
-                                                key="adm_comp_" + tid + "_" + str(idx))
-                        new_comp_atl = next((a for a in atleti_disp if a["nome"] == new_comp), None)
-                        if st.button("Salva compagno", key="sv_comp_" + tid + "_" + str(idx),
-                                     use_container_width=True):
-                            if isinstance(entry, dict):
-                                entry["compagno_nome"] = new_comp
-                                entry["compagno_id"]   = new_comp_atl["id"] if new_comp_atl else None
-                            else:
-                                torneo["iscritti"][idx] = {
-                                    "email": email, "nome": en,
-                                    "compagno_nome": new_comp,
-                                    "compagno_id": new_comp_atl["id"] if new_comp_atl else None,
-                                    "data_iscrizione": data_i,
-                                }
-                            save_state(state)
-                            st.success("Compagno aggiornato.")
-                            st.rerun()
-
-                    with col_e3:
-                        if st.button("Rimuovi", key="rm_iscr_" + tid + "_" + str(idx),
-                                     use_container_width=True):
-                            torneo["iscritti"].pop(idx)
-                            save_state(state)
-                            st.rerun()
-
-        st.markdown("---")
-        st.markdown("#### Aggiungi Atleta Manualmente")
-        tutti_atleti    = state.get("atleti",[])
-        iscritti_emails = set()
-        for e in iscritti:
-            if isinstance(e, dict): iscritti_emails.add(e.get("email",""))
-            else: iscritti_emails.add(str(e))
-
-        da_aggiungere = [a for a in tutti_atleti if a.get("email","") not in iscritti_emails]
-        if da_aggiungere:
-            opz_add = [a["nome"] + " (" + a.get("email","no email") + ")" for a in da_aggiungere]
-            scelta  = st.selectbox("Scegli atleta", opz_add, key="add_sel_"+tid)
-            idx_sel = opz_add.index(scelta)
-            atl_sel = da_aggiungere[idx_sel]
-            if st.button("Aggiungi all'iscrizione", key="add_iscr_"+tid,
-                         use_container_width=True, type="primary"):
-                torneo["iscritti"].append({
-                    "email":           atl_sel.get("email",""),
-                    "nome":            atl_sel["nome"],
-                    "compagno_nome":   "Da definire",
-                    "compagno_id":     None,
-                    "data_iscrizione": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                })
-                save_state(state)
-                st.success(atl_sel["nome"] + " aggiunto!")
-                st.rerun()
-        else:
-            st.caption("Tutti gli atleti registrati sono gia' iscritti.")
+        _render_tab_squadre_admin(torneo, state, tid)
 
 
 # ─── UTENTI: Griglia card cliccabili ─────────────────────────────────────────
