@@ -32,8 +32,22 @@ def _get_smtp_creds():
 
 
 # ─── PERSISTENZA UTENTI ───────────────────────────────────────────────────────
+# Chiave nel foglio Google Sheets: "users_db"
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _load_users() -> dict:
+    # 1. Prova Google Sheets
+    try:
+        from data_manager import _get_gsheet, _sheet_read_all
+        sheet = _get_gsheet()
+        if sheet is not None:
+            store = _sheet_read_all(sheet)
+            val = store.get("users_db")
+            if val:
+                return json.loads(val)
+    except Exception:
+        pass
+    # 2. Fallback locale
     if Path(USERS_FILE).exists():
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -41,6 +55,15 @@ def _load_users() -> dict:
 
 
 def _save_users(users: dict):
+    # 1. Salva su Google Sheets
+    try:
+        from data_manager import _get_gsheet, _sheet_write
+        sheet = _get_gsheet()
+        if sheet is not None:
+            _sheet_write(sheet, {"users_db": json.dumps(users, ensure_ascii=False)})
+    except Exception:
+        pass
+    # 2. Backup locale silenzioso
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, ensure_ascii=False, indent=2)
 
