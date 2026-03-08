@@ -102,30 +102,41 @@ def _sheet_read_all(sheet):
 def _sheet_write(sheet, updates: dict):
     """
     Scrive un dict {chiave: valore} nel foglio.
-    Aggiorna le righe esistenti, aggiunge quelle nuove.
-    updates = { "main_data": "..json..", "cover:tp_123": "..b64.." }
+    Chunka automaticamente qualsiasi valore > _CELL_LIMIT caratteri.
+    Aggiorna righe esistenti, aggiunge quelle nuove.
     """
     if not updates:
         return
+
+    # Espandi i valori troppo grandi in chunk prima di scrivere
+    expanded = {}
+    for key, value in updates.items():
+        if not isinstance(value, str):
+            value = str(value)
+        if len(value) <= _CELL_LIMIT:
+            expanded[key] = value
+        else:
+            chunks = [value[i:i+_CELL_LIMIT] for i in range(0, len(value), _CELL_LIMIT)]
+            expanded[key] = f"<chunk:{len(chunks)}>"
+            for ci, chunk in enumerate(chunks):
+                expanded[f"{key}:c{ci}"] = chunk
+
     try:
         rows = sheet.get_all_values()
-        # Mappa chiave -> numero riga (1-based)
         key_to_row = {}
         for i, row in enumerate(rows, start=1):
             if row and row[0]:
                 key_to_row[row[0]] = i
 
-        # Prepara le celle da aggiornare o appendere
-        to_update = []   # (row_num, key, value)
-        to_append = []   # [key, value]
+        to_update = []
+        to_append = []
 
-        for key, value in updates.items():
+        for key, value in expanded.items():
             if key in key_to_row:
                 to_update.append((key_to_row[key], key, value))
             else:
                 to_append.append([key, value])
 
-        # Aggiorna celle esistenti in batch
         if to_update:
             cell_updates = []
             for row_num, key, value in to_update:
@@ -135,12 +146,26 @@ def _sheet_write(sheet, updates: dict):
                 })
             sheet.batch_update(cell_updates)
 
-        # Appendi nuove righe
         if to_append:
             sheet.append_rows(to_append, value_input_option="RAW")
 
     except Exception as e:
         raise e
+
+
+def _sheet_read_chunked(store: dict, key: str) -> str:
+    """
+    Legge una chiave dal foglio, riassemblando i chunk se necessario.
+    Usare al posto di store.get(key) per chiavi che potrebbero essere state chunkate.
+    """
+    val = store.get(key, "")
+    if val.startswith("<chunk:"):
+        try:
+            n = int(val.split(":")[1].rstrip(">"))
+            val = "".join(store.get(f"{key}:c{i}", "") for i in range(n))
+        except Exception:
+            pass
+    return val
 
 
 def _save_local(state):
@@ -234,10 +259,7 @@ def _restore_images_state(state, store):
     ))
     for tid in tid_keys:
         base_key = f"torneo_prog:{tid}"
-        val = store.get(base_key, "")
-        if val.startswith("<chunk:"):
-            n = int(val.split(":")[1].rstrip(">"))
-            val = "".join(store.get(f"{base_key}:c{i}", "") for i in range(n))
+        val = _sheet_read_chunked(store, base_key)
         if val:
             try:
                 t = json.loads(val)
@@ -264,7 +286,7 @@ def load_state():
     if sheet is not None:
         try:
             store = _sheet_read_all(sheet)
-            val = store.get("main_data")
+            val = _sheet_read_chunked(store, "main_data")
             if val:
                 data = json.loads(val)
                 data = _restore_images_state(data, store)
@@ -285,9 +307,18 @@ def save_state(state):
         try:
             s_light, extras = _strip_images_state(state)
 
-            # main_data senza tornei_programmati (molto più piccolo)
+            # Chunking automatico di main_data se supera il limite cella
             main_json = json.dumps(s_light, ensure_ascii=False)
-            updates = {"main_data": main_json}
+            updates = {}
+            if len(main_json) <= _CELL_LIMIT:
+                updates["main_data"] = main_json
+            else:
+                chunks = [main_json[i:i+_CELL_LIMIT]
+                          for i in range(0, len(main_json), _CELL_LIMIT)]
+                updates["main_data"] = f"<chunk:{len(chunks)}>"
+                for ci, chunk in enumerate(chunks):
+                    updates[f"main_data:c{ci}"] = chunk
+
             updates.update(extras)
 
             # Elimina righe orfane di tornei cancellati
