@@ -290,7 +290,8 @@ def _render_atleti_manager(state):
                 nuovo = new_atleta(nuovo_nome.strip(), nuovo_cognome.strip())
                 if foto_file:
                     import base64
-                    nuovo["foto_b64"] = base64.b64encode(foto_file.read()).decode()
+                    nuovo["foto_b64"]  = base64.b64encode(foto_file.read()).decode()
+                    nuovo["foto_mime"] = foto_file.type or "image/jpeg"
                 state["atleti"].append(nuovo)
                 save_state(state)
                 st.success(f"✅ {full} aggiunto! (OVR 40 — Bronzo Raro)")
@@ -307,7 +308,7 @@ def _render_atleti_manager(state):
             with col_a:
                 foto_html = ""
                 if a.get("foto_b64"):
-                    foto_html = f'<img src="data:image/png;base64,{a["foto_b64"]}" style="height:20px;width:20px;border-radius:50%;object-fit:cover;margin-right:6px;vertical-align:middle">'
+                    foto_html = f'<img src="data:{a.get('foto_mime','image/jpeg')};base64,{a["foto_b64"]}" style="height:20px;width:20px;border-radius:50%;object-fit:cover;margin-right:6px;vertical-align:middle">'
                 from data_manager import calcola_overall_fifa, get_card_type
                 ovr = calcola_overall_fifa(a)
                 ct = get_card_type(ovr)
