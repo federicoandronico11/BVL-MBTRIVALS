@@ -18,6 +18,24 @@ def render_live_ospite(state):
     data_torneo = torneo.get("data", "")
 
     # ── Header ────────────────────────────────────────────────────────────────
+    luogo       = torneo.get("luogo","")
+    formato_set = torneo.get("formato_set","")
+    tipo        = torneo.get("modalita", torneo.get("tipo_tabellone",""))
+    tipo_gioco  = torneo.get("tipo_gioco","")
+    pmax        = torneo.get("punteggio_max","")
+    num_gironi  = torneo.get("num_gironi","")
+
+    meta_bits = "  ·  ".join(filter(None, [
+        ("📅 " + data_torneo) if data_torneo else "",
+        ("📍 " + luogo) if luogo else "",
+        ("⏰ " + orario_inizio) if orario_inizio else "",
+        (f"🏖️ {num_campi} campo{'i' if num_campi > 1 else ''}") if num_campi else "",
+        ("🏐 " + formato_set) if formato_set else "",
+        ("👥 " + tipo_gioco) if tipo_gioco else "",
+        ("📊 " + tipo) if tipo else "",
+        (f"🎯 {pmax} pt") if pmax else "",
+    ]))
+
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#0a0a0f,#1a0a0f);
          border:2px solid #e8002d;border-radius:16px;padding:20px 24px;
@@ -30,10 +48,8 @@ def render_live_ospite(state):
              font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:2px">
             {nome_torneo}
         </div>
-        <div style="color:#888;font-size:0.8rem;margin-top:6px">
-            {"📅 " + data_torneo if data_torneo else ""}
-            {"  ·  ⏰ Inizio " + orario_inizio if orario_inizio else ""}
-            {"  ·  🏖️ " + str(num_campi) + (" campo" if num_campi == 1 else " campi") if num_campi else ""}
+        <div style="color:#888;font-size:0.75rem;margin-top:8px;line-height:1.8">
+            {meta_bits}
         </div>
     </div>
     """, unsafe_allow_html=True)
