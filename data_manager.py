@@ -357,87 +357,115 @@ def _cleanup_deleted_tornei(sheet, state):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCHEDULER CAMPI E ORARI
-# Calcola automaticamente campo e orario per ogni partita.
-# Ogni set dura ~20 min. Le partite si distribuiscono sui campi disponibili.
+# SCHEDULER CAMPI E ORARI  v2
+# Regola: se num_gironi == num_campi → ogni campo è dedicato a un girone.
+# Altrimenti distribuzione earliest-available su tutti i campi.
+# Fase eliminatoria: distribuzione round-robin sui campi disponibili.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from datetime import datetime as _dt, timedelta as _td
 
 def _minuti_per_partita(formato_set):
-    """Stima durata partita in minuti in base al formato."""
-    if formato_set == "Best of 3":
-        return 60   # 3 set × 20 min
-    if formato_set == "Best of 5":
-        return 100  # 5 set × 20 min
-    return 20       # Set Unico
+    """Durata stimata partita: 20 min a set."""
+    if formato_set == "Best of 3":  return 60
+    if formato_set == "Best of 5":  return 100
+    return 20  # Set Unico
+
+def _base_dt(data_str, orario_inizio):
+    """Converte data+orario in datetime, con fallback robusto."""
+    for fmt in ("%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return _dt.strptime(f"{data_str} {orario_inizio}", fmt)
+        except Exception:
+            pass
+    return _dt.now().replace(hour=9, minute=0, second=0, microsecond=0)
 
 
 def calcola_schedule(state):
     """
-    Assegna campo e orario a tutte le partite non ancora confermate.
-    Chiama questa funzione ogni volta che viene confermato un risultato
-    per ricalcolare gli orari delle partite successive.
+    Assegna campo e orario a tutte le partite del torneo.
+
+    GIRONI:
+    - Se num_gironi == num_campi → ogni campo dedicato interamente a un girone.
+    - Altrimenti → distribuzione earliest-available su tutti i campi.
+
+    ELIMINATORIE:
+    - Ogni round riparte dal primo slot libero, distribuito sui campi disponibili.
+    - Iniziano dopo la fine stimata della fase gironi.
     """
-    torneo = state.get("torneo", {})
-    num_campi     = int(torneo.get("num_campi", 1))
+    torneo        = state.get("torneo", {})
+    num_campi     = max(1, int(torneo.get("num_campi", 1)))
     orario_inizio = torneo.get("orario_inizio", "09:00")
     formato_set   = torneo.get("formato_set", "Set Unico")
     data_str      = torneo.get("data", str(_dt.today().date()))
     durata        = _minuti_per_partita(formato_set)
+    gironi        = state.get("gironi", [])
+    num_gironi    = len(gironi)
 
-    try:
-        base_dt = _dt.strptime(f"{data_str} {orario_inizio}", "%Y-%m-%d %H:%M")
-    except Exception:
-        base_dt = _dt.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    base = _base_dt(data_str, orario_inizio)
 
-    # Raccoglie tutte le partite in ordine
-    tutte = []
-    for girone in state.get("gironi", []):
-        for p in girone.get("partite", []):
-            tutte.append(p)
-    for p in state.get("bracket", []):
-        tutte.append(p)
-    for p in state.get("bracket_extra", []):
-        tutte.append(p)
+    # ── cursori per campo: ogni campo ha il proprio orologio ─────────────────
+    # inizializzati tutti a base
+    cursori = [base] * num_campi
 
-    # Dividi in confermate (usate per calcolare il tempo trascorso)
-    # e non confermate (da schedulare)
-    confermate     = [p for p in tutte if p.get("confermata")]
-    non_confermate = [p for p in tutte if not p.get("confermata")]
+    # ─── FASE GIRONI ──────────────────────────────────────────────────────────
+    girone_dedicato = (num_gironi > 0 and num_gironi == num_campi)
 
-    # Tieni il cursore orario per ogni campo
-    # Partiamo dalla fine delle partite già confermate
-    cursori = [base_dt] * num_campi
+    for g_idx, girone in enumerate(gironi):
+        partite = [p for p in girone.get("partite", []) if not p.get("is_bye")]
 
-    # Avanza i cursori per le partite già confermate
-    for p in confermate:
-        campo = p.get("campo", 1)
-        if 1 <= campo <= num_campi:
-            idx = campo - 1
-            orario_p = p.get("orario_schedulato", "")
-            if orario_p:
-                try:
-                    p_dt = _dt.strptime(f"{data_str} {orario_p}", "%Y-%m-%d %H:%M")
-                    fine = p_dt + _td(minutes=durata)
-                    if fine > cursori[idx]:
-                        cursori[idx] = fine
-                except Exception:
-                    cursori[idx] += _td(minutes=durata)
-            else:
-                cursori[idx] += _td(minutes=durata)
+        if girone_dedicato:
+            # Campo fisso = indice girone + 1
+            campo_n = g_idx + 1
+            for p in partite:
+                p["campo"] = campo_n
+                if not p.get("confermata"):
+                    p["orario_schedulato"] = cursori[campo_n - 1].strftime("%H:%M")
+                cursori[campo_n - 1] += _td(minutes=durata)
+        else:
+            # Earliest-available su tutti i campi
+            for p in partite:
+                campo_idx = cursori.index(min(cursori))
+                p["campo"] = campo_idx + 1
+                if not p.get("confermata"):
+                    p["orario_schedulato"] = cursori[campo_idx].strftime("%H:%M")
+                cursori[campo_idx] += _td(minutes=durata)
 
-    # Assegna campo e orario alle partite non confermate
-    for p in non_confermate:
-        # Skip BYE
-        if p.get("is_bye"):
-            continue
-        # Trova il campo disponibile prima (quello con cursore più basso)
-        campo_idx  = cursori.index(min(cursori))
-        orario_dt  = cursori[campo_idx]
-        p["campo"]              = campo_idx + 1
-        p["orario_schedulato"]  = orario_dt.strftime("%H:%M")
-        cursori[campo_idx]     += _td(minutes=durata)
+    # ─── FASE ELIMINATORIA ────────────────────────────────────────────────────
+    # Tutti gli slot eliminatori partono dopo la fine stimata dei gironi
+    # (= il cursore più avanzato tra tutti i campi)
+    fine_gironi = max(cursori)
+    # Reset cursori per la fase eliminatoria, tutti a fine_gironi
+    cursori_playoff = [fine_gironi] * num_campi
+
+    # Raggruppa bracket per round per schedulare round dopo round
+    bracket_all = state.get("bracket", []) + state.get("bracket_extra", [])
+    rounds_order = []
+    rounds_map   = {}
+    for p in bracket_all:
+        r = p.get("round", "Playoff")
+        if r not in rounds_map:
+            rounds_map[r] = []
+            rounds_order.append(r)
+        rounds_map[r].append(p)
+
+    for rname in rounds_order:
+        partite_round = [p for p in rounds_map[rname] if not p.get("is_bye")]
+        # Ogni round: cursori reset al massimo dei cursori playoff correnti
+        # così le partite di un round non si sovrappongono al round precedente
+        inizio_round = max(cursori_playoff)
+        cursori_round = [inizio_round] * num_campi
+
+        for p in partite_round:
+            campo_idx = cursori_round.index(min(cursori_round))
+            p["campo"] = campo_idx + 1
+            if not p.get("confermata"):
+                p["orario_schedulato"] = cursori_round[campo_idx].strftime("%H:%M")
+            cursori_round[campo_idx] += _td(minutes=durata)
+
+        # Aggiorna cursori_playoff con la fine di questo round
+        for i in range(num_campi):
+            cursori_playoff[i] = cursori_round[i]
 
     return state
 
