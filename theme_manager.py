@@ -218,7 +218,8 @@ def load_theme_config():
         sheet = _get_gsheet()
         if sheet is not None:
             store = _sheet_read_all(sheet)
-            val = store.get("theme_cfg")
+            from data_manager import _sheet_read_chunked
+            val = _sheet_read_chunked(store, "theme_cfg")
             if val:
                 cfg = json.loads(val)
                 # Assicura campi mancanti per compatibilità
