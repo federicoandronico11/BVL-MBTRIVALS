@@ -805,9 +805,52 @@ if page == "torneo":
     from fase_proclamazione import render_proclamazione
     render_header()
     fase = state["fase"]
+
+    # ── Pulsante AZZERA TORNEO (solo admin, solo fasi attive) ────────────────
+    if is_admin and fase in ("gironi", "eliminazione", "proclamazione"):
+        nome_t = state["torneo"].get("nome", "il torneo")
+        with st.expander("⚠️ Azzera Torneo", expanded=False):
+            st.warning(
+                f"Questa operazione cancella **tutti i risultati e i progressi** di "
+                f"**{nome_t}** e riporta il torneo alla fase di Setup iniziale, "
+                f"mantenendo squadre e atleti."
+            )
+            conferma_key = "conferma_reset_torneo"
+            st.checkbox("Confermo — voglio azzerare tutti i risultati", key=conferma_key)
+            if st.session_state.get(conferma_key):
+                if st.button("🔄 AZZERA TORNEO", type="primary", use_container_width=True):
+                    # Resetta gironi, bracket, risultati; mantieni squadre/atleti/impostazioni
+                    from data_manager import genera_gironi, calcola_schedule
+                    # Azzera stats partita delle squadre
+                    for sq in state["squadre"]:
+                        sq["punti_classifica"] = 0
+                        sq["set_vinti"]        = 0
+                        sq["set_persi"]        = 0
+                        sq["punti_fatti"]      = 0
+                        sq["punti_subiti"]     = 0
+                        sq["vittorie"]         = 0
+                        sq["sconfitte"]        = 0
+                    # Rigenera gironi puliti con le stesse squadre
+                    ids         = [s["id"] for s in state["squadre"]]
+                    num_gironi  = state["torneo"].get("num_gironi", 2)
+                    modalita    = state["torneo"].get("modalita", "Gironi + Playoff")
+                    if modalita == "Girone Unico":
+                        num_gironi = 1
+                    use_ranking = state["torneo"].get("usa_ranking_teste_serie", False)
+                    state["gironi"]        = genera_gironi(ids, num_gironi, use_ranking=use_ranking, state=state)
+                    state["bracket"]       = []
+                    state["bracket_extra"] = []
+                    state["vincitore"]     = None
+                    state["podio"]         = []
+                    state["fase"]          = "gironi"
+                    calcola_schedule(state)
+                    save_state(state)
+                    st.session_state[conferma_key] = False
+                    st.success(f"✅ Torneo **{nome_t}** azzerato. Gironi rigenerati!")
+                    st.rerun()
+
     if fase == "setup":
         if is_admin:
-            # Banner se il setup è stato avviato da un torneo programmato
             nome_avviato = st.session_state.pop("torneo_avviato_da", None)
             if nome_avviato:
                 st.success(f"🚀 **{nome_avviato}** caricato nel Setup! Puoi fare ulteriori modifiche prima di avviare il torneo.")
