@@ -790,6 +790,57 @@ def _aggiorna_attributi_fifa(atleta, posizione, n_squadre=8):
             b = 1  # partecipazione minima
         s[attr] = min(99, s[attr] + random.randint(0, b))
 
+def ricalcola_stats_da_storico(state):
+    """
+    Ricalcola da zero tutte le statistiche FIFA degli atleti
+    a partire dallo storico_posizioni già salvato + dati partite squadre.
+    Usare per correggere statistiche di tornei già conclusi.
+    Azzera e ricostruisce: tornei, vittorie, sconfitte, set, punti, attributi.
+    """
+    # Step 1: azzeramento completo stats di tutti gli atleti
+    for atleta in state.get("atleti", []):
+        s = atleta["stats"]
+        s["tornei"]       = 0
+        s["vittorie"]     = 0
+        s["sconfitte"]    = 0
+        s["set_vinti"]    = 0
+        s["set_persi"]    = 0
+        s["punti_fatti"]  = 0
+        s["punti_subiti"] = 0
+        # Reset attributi al valore base 40
+        for attr in ["attacco","difesa","muro","ricezione","battuta","alzata"]:
+            s[attr] = 40
+
+    # Step 2: ricalcola da storico_posizioni
+    # Per ogni atleta con storico, ricalcola tornei/vit/sconf
+    # e riapplica i boost FIFA proporzionali
+    for atleta in state.get("atleti", []):
+        s = atleta["stats"]
+        for entry in s.get("storico_posizioni", []):
+            e = _parse_storico_entry(entry)
+            pos       = e.get("pos", 10)
+            n_squadre = e.get("n_squadre", 10)
+            sv        = e.get("set_vinti", 0)
+            sp        = e.get("set_persi", 0)
+            pf        = e.get("punti_fatti", 0)
+            ps        = e.get("punti_subiti", 0)
+
+            s["tornei"]       += 1
+            s["set_vinti"]    += sv
+            s["set_persi"]    += sp
+            s["punti_fatti"]  += pf
+            s["punti_subiti"] += ps
+            if pos == 1:
+                s["vittorie"]  += 1
+            else:
+                s["sconfitte"] += 1
+
+            # Ricalcola boost FIFA con la stessa formula proporzionale
+            _aggiorna_attributi_fifa(atleta, pos, n_squadre)
+
+    return state
+
+
 def calcola_overall_fifa(atleta):
     """
     Calcola overall FIFA per un atleta.
