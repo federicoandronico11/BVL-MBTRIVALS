@@ -255,9 +255,12 @@ def _avvia_torneo(state, torneo):
     st.session_state["torneo_avviato_da"] = torneo.get("nome_programmato", "")
     st.session_state["avvia_torneo_mode"] = True
 
+    # ← NAVIGAZIONE: porta l'admin alla pagina Torneo (Setup)
+    st.session_state["current_page"]      = "torneo"
+    st.session_state["segnapunti_open"]   = False
+
     from data_manager import save_state
     save_state(state)
-    st.success("🚀 Torneo **" + torneo.get("nome_programmato","") + "** caricato nel Setup! Puoi fare ulteriori modifiche prima di iniziare.")
     st.rerun()
 
 
