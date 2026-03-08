@@ -577,6 +577,9 @@ with st.sidebar:
         if st.button("📅 Gestisci Tornei in Programma", use_container_width=True, key="btn_admin_tornei_prog"):
             st.session_state.current_page = "admin_tornei_programmati"; st.session_state.segnapunti_open = False; st.rerun()
 
+        if st.button("🔧 Ricalcola Statistiche Atleti", use_container_width=True, key="btn_ricalcola_stats"):
+            st.session_state.current_page = "ricalcola_stats"; st.session_state.segnapunti_open = False; st.rerun()
+
         if st.button("⚡ MBT RIVALS — Card Game", use_container_width=True, key="btn_rivals"):
             st.session_state.current_page = "rivals"; st.session_state.segnapunti_open = False; st.rerun()
 
@@ -951,6 +954,43 @@ elif page == "incassi":
     else:
         render_header()
         st.error("🔒 Sezione riservata agli amministratori.")
+
+elif page == "ricalcola_stats":
+    if is_admin:
+        render_header()
+        st.markdown("## 🔧 Ricalcolo Statistiche Atleti")
+        st.info(
+            "Questa operazione **azzera e ricalcola da zero** tutti gli attributi FIFA "
+            "e le statistiche di ogni atleta, partendo dallo storico tornei gia salvato. "
+            "Usa questo strumento per correggere dati di tornei gia conclusi."
+        )
+        atleti_con_storico = [a for a in state.get("atleti", []) if a["stats"].get("storico_posizioni")]
+        if not atleti_con_storico:
+            st.warning("Nessun atleta ha storico tornei salvato.")
+        else:
+            st.markdown(f"**{len(atleti_con_storico)} atleti** con storico torneo trovati.")
+            with st.expander("Anteprima storico salvato", expanded=False):
+                for a in atleti_con_storico[:10]:
+                    st.markdown(f"**{a['nome']}** — {len(a['stats']['storico_posizioni'])} torneo/i")
+                    for e in a["stats"]["storico_posizioni"]:
+                        from data_manager import _parse_storico_entry
+                        en = _parse_storico_entry(e)
+                        st.caption(f"  pos {en['pos']} / {en['n_squadre']} sq — "
+                                   f"set {en.get('set_vinti',0)}V/{en.get('set_persi',0)}P — "
+                                   f"punti {en.get('punti_fatti',0)}-{en.get('punti_subiti',0)}")
+                if len(atleti_con_storico) > 10:
+                    st.caption(f"... e altri {len(atleti_con_storico)-10} atleti")
+            conferma_r = st.checkbox("Confermo — voglio ricalcolare tutte le statistiche", key="conf_ricalcola")
+            if conferma_r:
+                if st.button("RICALCOLA ORA", type="primary", use_container_width=True, key="btn_ricalcola"):
+                    from data_manager import ricalcola_stats_da_storico
+                    ricalcola_stats_da_storico(state)
+                    save_state(state)
+                    st.success("Statistiche ricalcolate per tutti gli atleti!")
+                    st.rerun()
+    else:
+        render_header()
+        st.error("Sezione riservata agli amministratori.")
 
 elif page == "theme":
     if is_admin:
