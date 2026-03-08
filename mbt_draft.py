@@ -799,7 +799,8 @@ def _restore_foto_draft(db, store):
 def load_draft_db():
     store = _draft_sheet_read_all()
     if store:
-        val = store.get("draft_db_meta")
+        from data_manager import _sheet_read_chunked
+        val = _sheet_read_chunked(store, "draft_db_meta") or None
         if val:
             try:
                 db = json.loads(val)
