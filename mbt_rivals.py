@@ -554,7 +554,8 @@ def _restore_foto_cards(db, store):
 def load_rivals_data():
     store = _rivals_sheet_read_all()
     if store:
-        val = store.get("rivals_data")
+        from data_manager import _sheet_read_chunked
+        val = _sheet_read_chunked(store, "rivals_data") or None
         if val:
             try:
                 return json.loads(val)
@@ -575,7 +576,8 @@ def save_rivals_data(data):
 def load_cards_db():
     store = _rivals_sheet_read_all()
     if store:
-        val = store.get("cards_db_meta")
+        from data_manager import _sheet_read_chunked
+        val = _sheet_read_chunked(store, "cards_db_meta") or None
         if val:
             try:
                 db = json.loads(val)
