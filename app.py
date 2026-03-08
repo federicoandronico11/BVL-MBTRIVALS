@@ -807,6 +807,10 @@ if page == "torneo":
     fase = state["fase"]
     if fase == "setup":
         if is_admin:
+            # Banner se il setup è stato avviato da un torneo programmato
+            nome_avviato = st.session_state.pop("torneo_avviato_da", None)
+            if nome_avviato:
+                st.success(f"🚀 **{nome_avviato}** caricato nel Setup! Puoi fare ulteriori modifiche prima di avviare il torneo.")
             from fase_setup import render_setup
             render_setup(state)
         else:
