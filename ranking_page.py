@@ -16,26 +16,22 @@ def calcola_punti_ranking(pos, n_squadre):
 
 
 def build_ranking_data(state):
+    from data_manager import _parse_storico_entry
     atleti_stats = []
     for a in state["atleti"]:
         s = a["stats"]
-        # Nuovi atleti partono con overall 40 (bronzo_raro) anche senza tornei
         rank_pts = 0
-        for entry in s["storico_posizioni"]:
-            if len(entry) == 3:
-                tn, pos, n_sq = entry
-            else:
-                tn, pos = entry
-                n_sq = _get_n_squadre_torneo(state, tn)
-            rank_pts += calcola_punti_ranking(pos, n_sq)
+        for raw_entry in s["storico_posizioni"]:
+            e = _parse_storico_entry(raw_entry)
+            rank_pts += calcola_punti_ranking(e["pos"], e.get("n_squadre", 8))
         quoziente_punti = round(s["punti_fatti"] / max(s["set_vinti"] + s["set_persi"], 1), 2)
         quoziente_set = round(s["set_vinti"] / max(s["set_persi"], 1), 2)
         win_rate = round(s["vittorie"] / max(s["tornei"], 1) * 100, 1) if s["tornei"] > 0 else 0
-        def _pos(entry): return entry[1]
-        medaglie_oro = sum(1 for e in s["storico_posizioni"] if _pos(e) == 1)
-        medaglie_argento = sum(1 for e in s["storico_posizioni"] if _pos(e) == 2)
-        medaglie_bronzo = sum(1 for e in s["storico_posizioni"] if _pos(e) == 3)
-        overall = calcola_overall_fifa(a)
+        storico_parsed = [_parse_storico_entry(e) for e in s["storico_posizioni"]]
+        medaglie_oro     = sum(1 for e in storico_parsed if e["pos"] == 1)
+        medaglie_argento = sum(1 for e in storico_parsed if e["pos"] == 2)
+        medaglie_bronzo  = sum(1 for e in storico_parsed if e["pos"] == 3)
+        overall   = calcola_overall_fifa(a)
         card_type = get_card_type(overall, s["tornei"], s["vittorie"])
         atleti_stats.append({
             "atleta": a, "id": a["id"], "nome": a["nome"],
@@ -45,7 +41,7 @@ def build_ranking_data(state):
             "quoziente_punti": quoziente_punti, "quoziente_set": quoziente_set,
             "win_rate": win_rate, "rank_pts": rank_pts,
             "oro": medaglie_oro, "argento": medaglie_argento, "bronzo": medaglie_bronzo,
-            "storico": s["storico_posizioni"],
+            "storico": storico_parsed,   # lista di dict normalizzati
             "overall": overall, "card_type": card_type,
         })
     atleti_stats.sort(key=lambda x: (-x["rank_pts"], -x["oro"], -x["argento"], -x["win_rate"]))
@@ -701,8 +697,8 @@ def _render_schede_atleti(state, ranking, atleta_id_preselect=None):
         with col1:
             st.markdown("#### 📈 Andamento Posizioni")
             df_pos = pd.DataFrame({
-                "Torneo": [e[0] for e in a["storico"]],
-                "Posizione": [e[1] for e in a["storico"]]
+                "Torneo": [e["nome"] for e in a["storico"]],
+                "Posizione": [e["pos"] for e in a["storico"]]
             }).set_index("Torneo")
             max_pos = df_pos["Posizione"].max()
             df_pos["Inv"] = max_pos + 1 - df_pos["Posizione"]
@@ -710,21 +706,51 @@ def _render_schede_atleti(state, ranking, atleta_id_preselect=None):
             st.caption("↑ = Migliore posizione")
         with col2:
             st.markdown("#### 📊 Punti per Torneo")
-            storico_pts = []
-            for entry in a["storico"]:
-                t_nome, pos = entry[0], entry[1]
-                n_sq_e = entry[2] if len(entry) == 3 else (len(state["squadre"]) or 8)
-                storico_pts.append({"Torneo": t_nome, "Punti": calcola_punti_ranking(pos, n_sq_e)})
+            storico_pts = [
+                {"Torneo": e["nome"], "Punti": calcola_punti_ranking(e["pos"], e.get("n_squadre", 8))}
+                for e in a["storico"]
+            ]
             df_pts = pd.DataFrame(storico_pts).set_index("Torneo")
             st.bar_chart(df_pts, height=200, color="#ffd700")
+
         st.markdown("#### 📋 Storico Tornei")
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-        for entry in a["storico"]:
-            t_nome, pos = entry[0], entry[1]
-            n_sq_entry = entry[2] if len(entry) == 3 else (len(state["squadre"]) or 8)
-            icon = medals.get(pos, f"#{pos}")
-            pts = calcola_punti_ranking(pos, n_sq_entry)
-            st.markdown(f"• {icon} **{t_nome}** — {pos}° posto → +{pts} pt ranking")
+        for e in a["storico"]:
+            pos       = e["pos"]
+            n_sq      = e.get("n_squadre", 8)
+            icon      = medals.get(pos, f"#{pos}")
+            pts       = calcola_punti_ranking(pos, n_sq)
+            luogo     = e.get("luogo", "")
+            data      = e.get("data", "")
+            fmt       = e.get("formato_set", "")
+            tipo      = e.get("tipo", "")
+            tipo_gioco= e.get("tipo_gioco", "")
+            compagni  = e.get("compagni", [])
+            sv        = e.get("set_vinti", 0)
+            sp        = e.get("set_persi", 0)
+            # Riga principale
+            extra_bits = "  ·  ".join(filter(None, [
+                ("📍 " + luogo) if luogo else "",
+                ("📅 " + data) if data else "",
+                ("🏐 " + fmt) if fmt else "",
+                ("👥 " + tipo_gioco) if tipo_gioco else "",
+                ("🏆 " + tipo) if tipo else "",
+                (f"Set {sv}V / {sp}P") if (sv or sp) else "",
+            ]))
+            comp_str = "🤝 " + " / ".join(compagni) if compagni else ""
+            st.markdown(
+                f'<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:8px;'
+                f'padding:10px 14px;margin-bottom:6px">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                f'<span style="font-weight:800;font-size:0.9rem;color:#fff">{icon} {e["nome"]}</span>'
+                f'<span style="color:#ffd700;font-weight:700;font-size:0.85rem">+{pts} pt</span>'
+                f'</div>'
+                f'<div style="font-size:0.72rem;color:#888;margin-top:4px">{pos}° / {n_sq} squadre'
+                + (f'  ·  {extra_bits}' if extra_bits else '')
+                + (f'<br>{comp_str}' if comp_str else '')
+                + f'</div></div>',
+                unsafe_allow_html=True
+            )
 
 
 def _render_modifica_profilo(state, atleta):
