@@ -231,18 +231,32 @@ def _avvia_torneo(state, torneo):
     # Salva riferimento al torneo programmato di origine
     t["torneo_programmato_id"]      = torneo.get("id", "")
 
-    # Precarica iscritti come atleti se non esistono già
+    from data_manager import new_atleta, new_squadra
+
+    # ── 1. Assicura che tutti gli atleti esistano in state["atleti"] ──────────
+    atleti_by_nome = {a["nome"].lower(): a for a in state.get("atleti", [])}
+
+    # Prima passa: aggiungi atleti mancanti dalle squadre_programmate
+    squadre_prog = torneo.get("squadre_programmate", [])
+    for sq_p in squadre_prog:
+        for nome_atl in sq_p.get("nomi_atleti", []):
+            nome_atl = nome_atl.strip()
+            if nome_atl and nome_atl.lower() not in atleti_by_nome:
+                nuovo = new_atleta(nome_atl)
+                state["atleti"].append(nuovo)
+                atleti_by_nome[nome_atl.lower()] = nuovo
+
+    # Seconda passa: aggiungi anche chi è negli iscritti "liberi" senza squadra
     iscritti = torneo.get("iscritti", [])
-    atleti_esistenti = {a["nome"].lower() for a in state.get("atleti", [])}
     for entry in iscritti:
         if isinstance(entry, dict):
             nome_atl = entry.get("nome", "").strip()
-            if nome_atl and nome_atl.lower() not in atleti_esistenti:
-                from data_manager import new_atleta
-                state["atleti"].append(new_atleta(nome_atl))
-                atleti_esistenti.add(nome_atl.lower())
+            if nome_atl and nome_atl.lower() not in atleti_by_nome:
+                nuovo = new_atleta(nome_atl)
+                state["atleti"].append(nuovo)
+                atleti_by_nome[nome_atl.lower()] = nuovo
 
-    # Porta alla fase setup
+    # ── 2. Reset torneo attivo ────────────────────────────────────────────────
     state["fase"] = "setup"
     state["gironi"] = []
     state["bracket"] = []
@@ -250,6 +264,22 @@ def _avvia_torneo(state, torneo):
     state["squadre"] = []
     state["vincitore"] = None
     state["podio"] = []
+
+    # ── 3. Converti squadre_programmate → squadre attive ─────────────────────
+    for sq_p in squadre_prog:
+        nomi = sq_p.get("nomi_atleti", [])
+        # Risolvi gli ID atleti usando il nome (aggiornato sopra)
+        atleti_ids = []
+        for nome in nomi:
+            atl = atleti_by_nome.get(nome.strip().lower())
+            if atl:
+                atleti_ids.append(atl["id"])
+        if not atleti_ids:
+            continue
+        nome_sq  = sq_p.get("nome") or " / ".join(nomi)
+        quota    = sq_p.get("quota", 0.0)
+        sq_attiva = new_squadra(nome_sq, atleti_ids, quota_pagata=quota)
+        state["squadre"].append(sq_attiva)
 
     # Segnale per il setup: mostra banner di avvio torneo
     st.session_state["torneo_avviato_da"] = torneo.get("nome_programmato", "")
