@@ -138,7 +138,8 @@ def get_card_style(overall):
 def _get_foto_html(atleta, height="110px"):
     """Genera HTML immagine o placeholder sagoma atletica SVG."""
     if atleta.get("foto_b64"):
-        return f'<img src="data:image/png;base64,{atleta["foto_b64"]}" style="width:100%;height:{height};object-fit:cover;object-position:top center;display:block">'
+        mime = atleta.get("foto_mime", "image/jpeg")
+        return f'<img src="data:{mime};base64,{atleta["foto_b64"]}" style="width:100%;height:{height};object-fit:cover;object-position:top center;display:block">'
     # Placeholder SVG sagoma atletica stilizzata
     return f'''<div style="width:100%;height:{height};background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center">
 <svg width="60" height="80" viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.5">
@@ -769,7 +770,8 @@ def _render_modifica_profilo(state, atleta):
             atleta["cognome"] = nuovo_cognome
         if foto_up:
             import base64
-            atleta["foto_b64"] = base64.b64encode(foto_up.read()).decode()
+            atleta["foto_b64"]  = base64.b64encode(foto_up.read()).decode()
+            atleta["foto_mime"] = foto_up.type or "image/jpeg"
         save_state(state)
         st.success("✅ Profilo aggiornato!")
         st.rerun()
