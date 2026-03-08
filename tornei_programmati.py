@@ -20,21 +20,57 @@ def render_admin_tornei_programmati(state):
 
 
 def _render_form_crea_torneo(state):
+    from datetime import time as _time
+    from data_manager import _bracket_size_from_n, BRACKET_ROUND_NAMES
     st.markdown("### Nuovo Torneo in Programma")
+
+    # ── Informazioni base ────────────────────────────────────────────────────
+    st.markdown("#### 📋 Informazioni Generali")
     col1, col2 = st.columns(2)
     with col1:
-        nome  = st.text_input("Nome del Torneo *", key="tp_nome", placeholder="Es. MBT Summer Open 2025")
+        nome   = st.text_input("Nome del Torneo *", key="tp_nome", placeholder="Es. MBT Summer Open 2025")
         data_t = st.text_input("Data del Torneo *", key="tp_data", value=datetime.today().strftime("%d/%m/%Y"))
-        luogo = st.text_input("Luogo *", key="tp_luogo", placeholder="Es. Catania, Lido La Playa")
+        luogo  = st.text_input("Luogo *", key="tp_luogo", placeholder="Es. Catania, Lido La Playa")
+        desc   = st.text_area("Descrizione / Regolamento", key="tp_desc", height=80)
     with col2:
-        formato   = st.selectbox("Formato Set", ["Set Unico","Best of 3","Best of 5"], key="tp_formato")
-        punteggio = st.selectbox("Punteggio Massimo", [11,15,21,25], index=2, key="tp_punteggio")
-        tipo      = st.selectbox("Tipo Tabellone", ["Gironi + Playoff","Girone Unico","Eliminazione Diretta"], key="tp_tipo")
-    desc  = st.text_area("Descrizione / Regolamento", key="tp_desc", height=100)
-    quota = st.number_input("Quota iscrizione (euro)", min_value=0.0, value=20.0, step=5.0, key="tp_quota")
+        quota = st.number_input("💶 Quota iscrizione (€)", min_value=0.0, value=20.0, step=5.0, key="tp_quota")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            tp_num_campi = st.number_input("🏖️ N° Campi", min_value=1, max_value=20, value=1, step=1, key="tp_campi")
+        with col_c2:
+            tp_orario = st.time_input("⏰ Orario Inizio", value=_time(9,0), key="tp_orario")
+        tp_attivo = st.toggle("👁️ Visibile subito agli utenti", value=True, key="tp_attivo")
 
-    st.markdown("#### Copertina del Torneo")
-    st.caption("Trascina un'immagine nell'area qui sotto oppure clicca per sfogliare.")
+    # ── Formato gara ─────────────────────────────────────────────────────────
+    st.markdown("#### 🏆 Formato Gara")
+    col3, col4 = st.columns(2)
+    with col3:
+        tipo      = st.selectbox("Modalità Torneo", ["Gironi + Playoff","Girone Unico","Eliminazione Diretta"], key="tp_tipo")
+        formato   = st.selectbox("Formato Set", ["Set Unico","Best of 3","Best of 5"], key="tp_formato")
+        punteggio = st.selectbox("Punteggio Massimo Set", [11,15,21,25,30], index=2, key="tp_punteggio")
+    with col4:
+        tipo_gioco   = st.selectbox("👥 Giocatori per Squadra", ["2x2","3x3","4x4"], key="tp_tipo_gioco")
+        usa_ranking  = st.toggle("🏅 Usa Ranking per Teste di Serie", value=False, key="tp_usa_ranking")
+        min_sq_opts  = [2,4,6,8,12,16]
+        tp_min_sq    = st.select_slider("Squadre minime per avviare", options=min_sq_opts, value=4, key="tp_min_sq")
+
+    # ── Impostazioni avanzate gironi ──────────────────────────────────────────
+    with st.expander("⚙️ Impostazioni Avanzate Gironi / Playoff", expanded=False):
+        col5, col6 = st.columns(2)
+        with col5:
+            tp_num_gironi  = st.number_input("Numero di Gironi", min_value=1, max_value=20, value=2, step=1, key="tp_ngironi")
+            tp_sq_passano  = st.number_input("Squadre qualificate per girone", min_value=1, max_value=8, value=2, step=1, key="tp_sqpassano")
+        with col6:
+            tp_sistema     = st.selectbox("Sistema qualificazione", ["Prime classificate","Classifica avulsa tra pari"], key="tp_sistema")
+            qualif_prev    = tp_sq_passano * tp_num_gironi
+            b_prev         = _bracket_size_from_n(qualif_prev)
+            n_bye_prev     = b_prev - qualif_prev
+            r_prev         = BRACKET_ROUND_NAMES.get(b_prev, str(b_prev)+" sq.")
+            bye_txt        = f" · **{n_bye_prev} BYE**" if n_bye_prev > 0 else " · Tabellone perfetto ✓"
+            st.caption(f"🏆 {qualif_prev} qualificate → **{r_prev}** (tabellone {b_prev}){bye_txt}")
+
+    # ── Copertina ─────────────────────────────────────────────────────────────
+    st.markdown("#### 🖼️ Copertina del Torneo")
     if "tp_cover_b64" not in st.session_state:
         st.session_state.tp_cover_b64 = None
         st.session_state.tp_cover_ext = "jpeg"
@@ -46,40 +82,54 @@ def _render_form_crea_torneo(state):
         st.session_state.tp_cover_ext = copertina_file.type.split("/")[-1]
     if st.session_state.tp_cover_b64:
         ext = st.session_state.tp_cover_ext
-        st.markdown('<img src="data:image/' + ext + ';base64,' + st.session_state.tp_cover_b64 + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-top:8px;border:2px solid #e8002d">', unsafe_allow_html=True)
+        st.markdown('<img src="data:image/' + ext + ';base64,' + st.session_state.tp_cover_b64 + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-top:8px;border:2px solid #e8002d">', unsafe_allow_html=True)
         if st.button("Rimuovi copertina", key="btn_rm_cover"):
             st.session_state.tp_cover_b64 = None
             st.rerun()
 
     st.markdown("---")
-    if st.button("CREA TORNEO IN PROGRAMMA", use_container_width=True, type="primary", key="btn_crea_torneo_prog"):
+    if st.button("✅ CREA TORNEO IN PROGRAMMA", use_container_width=True, type="primary", key="btn_crea_torneo_prog"):
         errors = []
         if not nome.strip():   errors.append("Inserisci il nome.")
         if not data_t.strip(): errors.append("Inserisci la data.")
         if not luogo.strip():  errors.append("Inserisci il luogo.")
         for e in errors: st.error(e)
         if not errors:
+            qualif_tot = int(tp_sq_passano) * int(tp_num_gironi)
+            b_size     = _bracket_size_from_n(qualif_tot)
             nuovo = {
-                "id": "tp_" + str(random.randint(10000,99999)),
-                "nome_programmato": nome.strip(),
-                "data_programmata": data_t.strip(),
-                "luogo": luogo.strip(),
-                "formato_set": formato,
-                "punteggio_max": punteggio,
-                "tipo_tabellone": tipo,
-                "descrizione": desc.strip(),
-                "quota": quota,
-                "copertina_b64": st.session_state.tp_cover_b64,
-                "cover_pos_x": 50,
-                "cover_pos_y": 50,
-                "iscritti": [],
-                "creato_il": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "attivo": True,
+                "id":                        "tp_" + str(random.randint(10000,99999)),
+                "nome_programmato":          nome.strip(),
+                "data_programmata":          data_t.strip(),
+                "luogo":                     luogo.strip(),
+                "formato_set":               formato,
+                "punteggio_max":             punteggio,
+                "tipo_tabellone":            tipo,
+                "modalita":                  tipo,
+                "descrizione":               desc.strip(),
+                "quota":                     quota,
+                "num_campi":                 int(tp_num_campi),
+                "orario_inizio":             tp_orario.strftime("%H:%M"),
+                "tipo_gioco":                tipo_gioco,
+                "usa_ranking_teste_serie":   usa_ranking,
+                "min_squadre":               int(tp_min_sq),
+                "num_gironi":                int(tp_num_gironi),
+                "squadre_per_girone_passano":int(tp_sq_passano),
+                "sistema_qualificazione":    tp_sistema,
+                "bracket_size":              b_size,
+                "n_bye_playoff":             b_size - qualif_tot,
+                "copertina_b64":             st.session_state.tp_cover_b64,
+                "cover_pos_x":               50,
+                "cover_pos_y":               50,
+                "iscritti":                  [],
+                "squadre_programmate":       [],
+                "creato_il":                 datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "attivo":                    tp_attivo,
             }
             state["tornei_programmati"].append(nuovo)
             save_state(state)
             st.session_state.tp_cover_b64 = None
-            st.success("Torneo " + nome.strip() + " creato con successo!")
+            st.success("✅ Torneo **" + nome.strip() + "** creato e salvato su Google Sheets!")
             st.rerun()
 
 
@@ -154,17 +204,32 @@ def _render_lista_tornei_admin(state):
 
 
 def _avvia_torneo(state, torneo):
-    """Copia i dati del torneo programmato nel setup e porta alla fase setup."""
+    """Copia TUTTE le impostazioni del torneo programmato nel setup e porta alla fase setup."""
     from data_manager import empty_state
-    
-    # Preleva dati dal torneo programmato
+
+    # Trasmetti TUTTE le impostazioni al torneo attivo
     t = state["torneo"]
-    t["nome"]             = torneo.get("nome_programmato", "")
-    t["data"]             = _converti_data(torneo.get("data_programmata", ""))
-    t["formato_set"]      = torneo.get("formato_set", "Set Unico")
-    t["punteggio_max"]    = torneo.get("punteggio_max", 21)
-    t["modalita"]         = torneo.get("tipo_tabellone", "Gironi + Playoff")
-    t["tipo_tabellone"]   = torneo.get("tipo_tabellone", "Gironi + Playoff")
+    t["nome"]                       = torneo.get("nome_programmato", "")
+    t["data"]                       = _converti_data(torneo.get("data_programmata", ""))
+    t["luogo"]                      = torneo.get("luogo", "")
+    t["formato_set"]                = torneo.get("formato_set", "Set Unico")
+    t["punteggio_max"]              = torneo.get("punteggio_max", 21)
+    t["modalita"]                   = torneo.get("tipo_tabellone", "Gironi + Playoff")
+    t["tipo_tabellone"]             = torneo.get("tipo_tabellone", "Gironi + Playoff")
+    t["tipo_gioco"]                 = torneo.get("tipo_gioco", "2x2")
+    t["num_campi"]                  = torneo.get("num_campi", 1)
+    t["orario_inizio"]              = torneo.get("orario_inizio", "09:00")
+    t["num_gironi"]                 = torneo.get("num_gironi", 2)
+    t["squadre_per_girone_passano"] = torneo.get("squadre_per_girone_passano", 2)
+    t["sistema_qualificazione"]     = torneo.get("sistema_qualificazione", "Prime classificate")
+    t["usa_ranking_teste_serie"]    = torneo.get("usa_ranking_teste_serie", False)
+    t["min_squadre"]                = torneo.get("min_squadre", 4)
+    t["bracket_size"]               = torneo.get("bracket_size", 4)
+    t["n_bye_playoff"]              = torneo.get("n_bye_playoff", 0)
+    t["quota"]                      = torneo.get("quota", 0)
+    t["descrizione"]                = torneo.get("descrizione", "")
+    # Salva riferimento al torneo programmato di origine
+    t["torneo_programmato_id"]      = torneo.get("id", "")
 
     # Precarica iscritti come atleti se non esistono già
     iscritti = torneo.get("iscritti", [])
@@ -336,56 +401,131 @@ def _render_editor_torneo(torneo, state):
 
     tab_info, tab_cover, tab_iscritti = st.tabs(["Informazioni", "Copertina", "Iscritti e Squadre"])
 
-    # ── TAB INFO ─────────────────────────────────────────────────────────────
+    # ── TAB INFO — tutte le impostazioni del Setup Torneo ───────────────────
     with tab_info:
+        st.markdown("#### 📋 Informazioni Generali")
         col1, col2 = st.columns(2)
         with col1:
             new_nome  = st.text_input("Nome del Torneo *", value=torneo.get("nome_programmato",""), key="ed_nome_"+tid)
-            new_data  = st.text_input("Data *", value=torneo.get("data_programmata",""), key="ed_data_"+tid)
+            new_data  = st.text_input("Data (gg/mm/aaaa) *", value=torneo.get("data_programmata",""), key="ed_data_"+tid)
             new_luogo = st.text_input("Luogo *", value=torneo.get("luogo",""), key="ed_luogo_"+tid)
+            new_desc  = st.text_area("Descrizione / Regolamento", value=torneo.get("descrizione",""), key="ed_desc_"+tid, height=80)
         with col2:
+            new_quota = st.number_input("💶 Quota Iscrizione (€)", min_value=0.0, value=float(torneo.get("quota",0.0)), step=5.0, key="ed_quota_"+tid)
+
+            # Campi e orario
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                new_num_campi = st.number_input("🏖️ N° Campi", min_value=1, max_value=20,
+                    value=int(torneo.get("num_campi", 1)), step=1, key="ed_campi_"+tid)
+            with col_c2:
+                from datetime import time as _time
+                orario_raw = torneo.get("orario_inizio", "09:00")
+                try:
+                    h, m = map(int, orario_raw.split(":"))
+                    ora_default = _time(h, m)
+                except Exception:
+                    ora_default = _time(9, 0)
+                new_orario = st.time_input("⏰ Orario Inizio", value=ora_default, key="ed_orario_"+tid)
+
+            new_att = st.toggle("👁️ Visibile agli utenti", value=torneo.get("attivo",True), key="ed_att_"+tid)
+
+        st.markdown("#### 🏆 Formato Gara")
+        col3, col4 = st.columns(2)
+        with col3:
+            tipo_opts = ["Gironi + Playoff","Girone Unico","Eliminazione Diretta"]
+            tipo_cur  = torneo.get("tipo_tabellone","Gironi + Playoff")
+            tipo_idx  = tipo_opts.index(tipo_cur) if tipo_cur in tipo_opts else 0
+            new_tipo  = st.selectbox("🏆 Modalità Torneo", tipo_opts, index=tipo_idx, key="ed_tipo_"+tid)
+
             fmt_opts  = ["Set Unico","Best of 3","Best of 5"]
             fmt_cur   = torneo.get("formato_set","Set Unico")
             fmt_idx   = fmt_opts.index(fmt_cur) if fmt_cur in fmt_opts else 0
             new_fmt   = st.selectbox("Formato Set", fmt_opts, index=fmt_idx, key="ed_fmt_"+tid)
 
-            pmax_opts = [11,15,21,25]
-            pmax_cur  = torneo.get("punteggio_max",21)
+            pmax_opts = [11,15,21,25,30]
+            pmax_cur  = int(torneo.get("punteggio_max", 21))
             pmax_idx  = pmax_opts.index(pmax_cur) if pmax_cur in pmax_opts else 2
-            new_pmax  = st.selectbox("Punteggio Max", pmax_opts, index=pmax_idx, key="ed_pmax_"+tid)
+            new_pmax  = st.selectbox("Punteggio Massimo Set", pmax_opts, index=pmax_idx, key="ed_pmax_"+tid)
 
-            tipo_opts = ["Gironi + Playoff","Girone Unico","Eliminazione Diretta"]
-            tipo_cur  = torneo.get("tipo_tabellone","Gironi + Playoff")
-            tipo_idx  = tipo_opts.index(tipo_cur) if tipo_cur in tipo_opts else 0
-            new_tipo  = st.selectbox("Tipo Tabellone", tipo_opts, index=tipo_idx, key="ed_tipo_"+tid)
+        with col4:
+            tipo_gioco_opts = ["2x2","3x3","4x4"]
+            tipo_gioco_cur  = torneo.get("tipo_gioco","2x2")
+            tipo_gioco_idx  = tipo_gioco_opts.index(tipo_gioco_cur) if tipo_gioco_cur in tipo_gioco_opts else 0
+            new_tipo_gioco  = st.selectbox("👥 Giocatori per Squadra", tipo_gioco_opts, index=tipo_gioco_idx, key="ed_tipogioco_"+tid)
 
-        new_desc  = st.text_area("Descrizione / Regolamento", value=torneo.get("descrizione",""), key="ed_desc_"+tid, height=120)
-        new_quota = st.number_input("Quota (euro)", min_value=0.0, value=float(torneo.get("quota",0.0)), step=5.0, key="ed_quota_"+tid)
-        new_att   = st.toggle("Torneo visibile agli utenti", value=torneo.get("attivo",True), key="ed_att_"+tid)
+            new_usa_ranking = st.toggle("🏅 Usa Ranking per Teste di Serie",
+                value=torneo.get("usa_ranking_teste_serie", False), key="ed_ranking_"+tid)
 
+            min_sq_options = [2,4,6,8,12,16]
+            min_sq_cur = int(torneo.get("min_squadre", 4))
+            if min_sq_cur not in min_sq_options:
+                min_sq_options = sorted(set(min_sq_options + [min_sq_cur]))
+            new_min_sq = st.select_slider("Squadre minime per avviare", options=min_sq_options,
+                value=min_sq_cur, key="ed_minsq_"+tid)
+
+        with st.expander("⚙️ Impostazioni Avanzate Gironi / Playoff", expanded=False):
+            col5, col6 = st.columns(2)
+            with col5:
+                new_num_gironi = st.number_input("Numero di Gironi", min_value=1, max_value=20,
+                    value=int(torneo.get("num_gironi", 2)), step=1, key="ed_ngironi_"+tid,
+                    help="Quanti gironi in cui dividere le squadre")
+                new_sq_passano = st.number_input("Squadre qualificate per girone", min_value=1, max_value=8,
+                    value=int(torneo.get("squadre_per_girone_passano", 2)), step=1, key="ed_sqpassano_"+tid)
+            with col6:
+                sistema_opts = ["Prime classificate","Classifica avulsa tra pari"]
+                sistema_cur  = torneo.get("sistema_qualificazione","Prime classificate")
+                sistema_idx  = sistema_opts.index(sistema_cur) if sistema_cur in sistema_opts else 0
+                new_sistema  = st.selectbox("Sistema qualificazione", sistema_opts, index=sistema_idx, key="ed_sistema_"+tid)
+
+                # Preview tabellone
+                from data_manager import _bracket_size_from_n, BRACKET_ROUND_NAMES
+                qualif_tot_prev = new_sq_passano * new_num_gironi
+                b_size_prev     = _bracket_size_from_n(qualif_tot_prev)
+                n_bye_prev      = b_size_prev - qualif_tot_prev
+                r_name_prev     = BRACKET_ROUND_NAMES.get(b_size_prev, str(b_size_prev)+" sq.")
+                bye_txt         = f" · **{n_bye_prev} BYE**" if n_bye_prev > 0 else " · Tabellone perfetto ✓"
+                st.caption(f"🏆 {qualif_tot_prev} qualificate → **{r_name_prev}** (tabellone {b_size_prev}){bye_txt}")
+
+        st.divider()
         col_sv, col_del = st.columns([3,1])
         with col_sv:
-            if st.button("Salva Modifiche", key="save_info_"+tid, use_container_width=True, type="primary"):
+            if st.button("💾 Salva Tutte le Impostazioni", key="save_info_"+tid, use_container_width=True, type="primary"):
                 errs = []
                 if not new_nome.strip():  errs.append("Nome obbligatorio.")
                 if not new_data.strip():  errs.append("Data obbligatoria.")
                 if not new_luogo.strip(): errs.append("Luogo obbligatorio.")
                 for e in errs: st.error(e)
                 if not errs:
-                    torneo["nome_programmato"] = new_nome.strip()
-                    torneo["data_programmata"] = new_data.strip()
-                    torneo["luogo"]            = new_luogo.strip()
-                    torneo["formato_set"]      = new_fmt
-                    torneo["punteggio_max"]    = new_pmax
-                    torneo["tipo_tabellone"]   = new_tipo
-                    torneo["descrizione"]      = new_desc.strip()
-                    torneo["quota"]            = new_quota
-                    torneo["attivo"]           = new_att
+                    # Salva tutte le impostazioni nel torneo programmato
+                    torneo["nome_programmato"]          = new_nome.strip()
+                    torneo["data_programmata"]          = new_data.strip()
+                    torneo["luogo"]                     = new_luogo.strip()
+                    torneo["formato_set"]               = new_fmt
+                    torneo["punteggio_max"]             = new_pmax
+                    torneo["tipo_tabellone"]            = new_tipo
+                    torneo["modalita"]                  = new_tipo
+                    torneo["descrizione"]               = new_desc.strip()
+                    torneo["quota"]                     = new_quota
+                    torneo["attivo"]                    = new_att
+                    torneo["num_campi"]                 = int(new_num_campi)
+                    torneo["orario_inizio"]             = new_orario.strftime("%H:%M")
+                    torneo["tipo_gioco"]                = new_tipo_gioco
+                    torneo["usa_ranking_teste_serie"]   = new_usa_ranking
+                    torneo["min_squadre"]               = int(new_min_sq)
+                    torneo["num_gironi"]                = int(new_num_gironi)
+                    torneo["squadre_per_girone_passano"]= int(new_sq_passano)
+                    torneo["sistema_qualificazione"]    = new_sistema
+                    # Calcola e salva bracket preview
+                    qualif_tot = int(new_sq_passano) * int(new_num_gironi)
+                    b_size     = _bracket_size_from_n(qualif_tot)
+                    torneo["bracket_size"]              = b_size
+                    torneo["n_bye_playoff"]             = b_size - qualif_tot
                     save_state(state)
-                    st.success("Modifiche salvate!")
+                    st.success("✅ Impostazioni salvate su Google Sheets!")
                     st.rerun()
         with col_del:
-            if st.button("Elimina Torneo", key="del_"+tid, use_container_width=True):
+            if st.button("🗑️ Elimina Torneo", key="del_"+tid, use_container_width=True):
                 state["tornei_programmati"].remove(torneo)
                 save_state(state)
                 st.session_state.admin_edit_torneo_id = None
@@ -650,26 +790,61 @@ def _render_dettaglio_torneo(torneo, user, state):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
+    # ── Griglia info completa ────────────────────────────────────────────────
+    tipo_gioco  = torneo.get("tipo_gioco","2x2")
+    num_campi   = torneo.get("num_campi",1)
+    orario_ini  = torneo.get("orario_inizio","")
+    num_gironi  = torneo.get("num_gironi","")
+    sq_pass     = torneo.get("squadre_per_girone_passano","")
+    sistema     = torneo.get("sistema_qualificazione","")
+    bracket_sz  = torneo.get("bracket_size","")
+
+    info_rows = [
+        ("🏐","Formato Set", formato),
+        ("🎯","Punteggio Max", str(punteggio) + " pt"),
+        ("📊","Modalità", tipo),
+        ("👥","Giocatori/Squadra", tipo_gioco),
+    ]
+    if num_campi:
+        info_rows.append(("🏖️","Campi da gioco", str(num_campi)))
+    if orario_ini:
+        info_rows.append(("⏰","Orario Inizio", orario_ini))
+    if num_gironi:
+        info_rows.append(("📐","Gironi", str(num_gironi)))
+    if sq_pass:
+        info_rows.append(("➡️","Qualif. per girone", str(sq_pass)))
+    if bracket_sz:
+        info_rows.append(("🏆","Tabellone Playoff", str(bracket_sz) + " sq."))
+    if sistema:
+        info_rows.append(("⚖️","Sistema qualif.", sistema))
+    info_rows.append(("👥","Iscritti", str(len(iscritti))))
+
+    # Mostra in griglia 2 colonne
+    pairs = list(zip(info_rows[::2], info_rows[1::2]))
+    if len(info_rows) % 2:
+        pairs.append((info_rows[-1], None))
+    for pair in pairs:
+        col_d1, col_d2 = st.columns(2)
+        for col_dx, row in zip([col_d1, col_d2], pair):
+            if row is None: continue
+            em, lbl, val = row
+            with col_dx:
+                st.markdown(
+                    f'<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:8px;'
+                    f'padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">'
+                    f'<span style="font-size:1.3rem">{em}</span>'
+                    f'<div><div style="color:#888;font-size:0.6rem;letter-spacing:2px;text-transform:uppercase">{lbl}</div>'
+                    f'<div style="color:#fff;font-weight:700;font-size:0.9rem">{val}</div></div></div>',
+                    unsafe_allow_html=True
+                )
+
+    if desc:
         st.markdown(
-            '<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:10px;padding:16px">'
-            '<div style="color:#e8002d;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:10px">Dettagli Gara</div>'
-            '<div style="font-size:0.85rem;color:#ccc;line-height:2">'
-            '🏐 Formato: <strong>' + formato + '</strong><br>'
-            '🎯 Punteggio max: <strong>' + str(punteggio) + ' pt</strong><br>'
-            '📊 Tabellone: <strong>' + tipo + '</strong><br>'
-            '👥 Iscritti: <strong>' + str(len(iscritti)) + '</strong></div></div>',
+            '<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:10px;padding:16px;margin-top:8px">'
+            '<div style="color:#e8002d;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:10px">Regolamento e Note</div>'
+            '<div style="font-size:0.85rem;color:#aaa;line-height:1.6">' + desc + '</div></div>',
             unsafe_allow_html=True
         )
-    with col_d2:
-        if desc:
-            st.markdown(
-                '<div style="background:#13131a;border:1px solid #2a2a3a;border-radius:10px;padding:16px">'
-                '<div style="color:#e8002d;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:10px">Regolamento e Note</div>'
-                '<div style="font-size:0.85rem;color:#aaa;line-height:1.6">' + desc + '</div></div>',
-                unsafe_allow_html=True
-            )
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("---")
