@@ -755,23 +755,45 @@ def _render_schede_atleti(state, ranking, atleta_id_preselect=None):
 
 
 def _render_modifica_profilo(state, atleta):
+    aid = atleta['id']
+    # Versione uploader — incrementa dopo ogni salvataggio per forzare reset widget
+    uploader_ver = st.session_state.get(f"foto_ver_{aid}", 0)
+
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        nuovo_nome = st.text_input("Nome", value=atleta.get("nome_proprio", atleta["nome"].split()[0] if atleta["nome"] else ""), key=f"edit_nome_{atleta['id']}")
+        nuovo_nome = st.text_input("Nome",
+            value=atleta.get("nome_proprio", atleta["nome"].split()[0] if atleta["nome"] else ""),
+            key=f"edit_nome_{aid}")
     with col2:
-        nuovo_cognome = st.text_input("Cognome", value=atleta.get("cognome", atleta["nome"].split()[-1] if len(atleta["nome"].split()) > 1 else ""), key=f"edit_cognome_{atleta['id']}")
+        nuovo_cognome = st.text_input("Cognome",
+            value=atleta.get("cognome", atleta["nome"].split()[-1] if len(atleta["nome"].split()) > 1 else ""),
+            key=f"edit_cognome_{aid}")
     with col3:
-        foto_up = st.file_uploader("📷 Foto", type=["png","jpg","jpeg"], key=f"edit_foto_{atleta['id']}")
-    if st.button("💾 Salva Modifiche Profilo", key=f"save_profile_{atleta['id']}"):
+        foto_up = st.file_uploader("📷 Foto (jpg/png/webp)",
+            type=["png","jpg","jpeg","webp"],
+            key=f"edit_foto_{aid}_v{uploader_ver}")
+
+    # Anteprima foto attuale
+    if atleta.get("foto_b64"):
+        mime = atleta.get("foto_mime", "image/jpeg")
+        st.markdown(
+            f'<img src="data:{mime};base64,{atleta["foto_b64"]}" '            f'style="height:80px;border-radius:8px;margin-bottom:8px">',
+            unsafe_allow_html=True)
+
+    if st.button("💾 Salva Modifiche Profilo", key=f"save_profile_{aid}"):
+        import base64
         full_name = f"{nuovo_nome} {nuovo_cognome}".strip()
         if full_name:
-            atleta["nome"] = full_name
+            atleta["nome"]         = full_name
             atleta["nome_proprio"] = nuovo_nome
-            atleta["cognome"] = nuovo_cognome
-        if foto_up:
-            import base64
-            atleta["foto_b64"]  = base64.b64encode(foto_up.read()).decode()
-            atleta["foto_mime"] = foto_up.type or "image/jpeg"
+            atleta["cognome"]      = nuovo_cognome
+        if foto_up is not None:
+            data = foto_up.read()
+            if data:
+                atleta["foto_b64"]  = base64.b64encode(data).decode()
+                atleta["foto_mime"] = foto_up.type or "image/jpeg"
+                # Incrementa versione per forzare reset widget uploader
+                st.session_state[f"foto_ver_{aid}"] = uploader_ver + 1
         save_state(state)
         st.success("✅ Profilo aggiornato!")
         st.rerun()
