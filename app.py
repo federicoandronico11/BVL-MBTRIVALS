@@ -815,13 +815,10 @@ if page == "torneo":
                 f"**{nome_t}** e riporta il torneo alla fase di Setup iniziale, "
                 f"mantenendo squadre e atleti."
             )
-            conferma_key = "conferma_reset_torneo"
-            st.checkbox("Confermo — voglio azzerare tutti i risultati", key=conferma_key)
-            if st.session_state.get(conferma_key):
-                if st.button("🔄 AZZERA TORNEO", type="primary", use_container_width=True):
-                    # Resetta gironi, bracket, risultati; mantieni squadre/atleti/impostazioni
+            conferma = st.checkbox("Confermo — voglio azzerare tutti i risultati", key="conferma_reset_torneo")
+            if conferma:
+                if st.button("🔄 AZZERA TORNEO", type="primary", use_container_width=True, key="btn_reset_torneo"):
                     from data_manager import genera_gironi, calcola_schedule
-                    # Azzera stats partita delle squadre
                     for sq in state["squadre"]:
                         sq["punti_classifica"] = 0
                         sq["set_vinti"]        = 0
@@ -830,10 +827,9 @@ if page == "torneo":
                         sq["punti_subiti"]     = 0
                         sq["vittorie"]         = 0
                         sq["sconfitte"]        = 0
-                    # Rigenera gironi puliti con le stesse squadre
-                    ids         = [s["id"] for s in state["squadre"]]
-                    num_gironi  = state["torneo"].get("num_gironi", 2)
-                    modalita    = state["torneo"].get("modalita", "Gironi + Playoff")
+                    ids        = [s["id"] for s in state["squadre"]]
+                    num_gironi = state["torneo"].get("num_gironi", 2)
+                    modalita   = state["torneo"].get("modalita", "Gironi + Playoff")
                     if modalita == "Girone Unico":
                         num_gironi = 1
                     use_ranking = state["torneo"].get("usa_ranking_teste_serie", False)
@@ -845,7 +841,6 @@ if page == "torneo":
                     state["fase"]          = "gironi"
                     calcola_schedule(state)
                     save_state(state)
-                    st.session_state[conferma_key] = False
                     st.success(f"✅ Torneo **{nome_t}** azzerato. Gironi rigenerati!")
                     st.rerun()
 
