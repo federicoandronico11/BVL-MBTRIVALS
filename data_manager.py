@@ -425,9 +425,47 @@ def aggiorna_classifica_squadra(state, partita):
         sq2["vittorie"] += 1; sq2["punti_classifica"] += 3
         sq1["sconfitte"] += 1; sq1["punti_classifica"] += 1
 
+
+def _parse_storico_entry(entry):
+    """
+    Legge un entry dello storico_posizioni in modo backward-compatible.
+    Formato vecchio: (nome, pos, n_sq)  oppure  (nome, pos)
+    Formato nuovo:   dict con chiavi nome/pos/n_squadre/luogo/data/...
+    Restituisce sempre un dict normalizzato.
+    """
+    if isinstance(entry, dict):
+        return entry
+    # Tupla legacy
+    if len(entry) >= 3:
+        return {"nome": entry[0], "pos": entry[1], "n_squadre": entry[2],
+                "luogo": "", "data": "", "formato_set": "", "tipo": "",
+                "tipo_gioco": "", "num_campi": 1, "punteggio_max": 21,
+                "compagni": [], "set_vinti": 0, "set_persi": 0,
+                "punti_fatti": 0, "punti_subiti": 0}
+    return {"nome": entry[0], "pos": entry[1], "n_squadre": 8,
+            "luogo": "", "data": "", "formato_set": "", "tipo": "",
+            "tipo_gioco": "", "num_campi": 1, "punteggio_max": 21,
+            "compagni": [], "set_vinti": 0, "set_persi": 0,
+            "punti_fatti": 0, "punti_subiti": 0}
+
 def trasferisci_al_ranking(state, podio):
-    nome_torneo = state["torneo"]["nome"]
-    n_squadre = len(state["squadre"])
+    t = state["torneo"]
+    nome_torneo  = t.get("nome", "Torneo")
+    n_squadre    = len([sq for sq in state["squadre"] if not sq.get("is_ghost")])
+    # Metadati ricchi del torneo — salvati nello storico per ranking/profili/carte/dashboard
+    meta_torneo = {
+        "nome":         nome_torneo,
+        "luogo":        t.get("luogo", ""),
+        "data":         t.get("data", ""),
+        "formato_set":  t.get("formato_set", ""),
+        "tipo":         t.get("modalita", t.get("tipo_tabellone", "")),
+        "tipo_gioco":   t.get("tipo_gioco", "2x2"),
+        "num_campi":    t.get("num_campi", 1),
+        "orario":       t.get("orario_inizio", ""),
+        "punteggio_max":t.get("punteggio_max", 21),
+        "num_gironi":   t.get("num_gironi", 2),
+        "n_squadre":    n_squadre,
+    }
     atleti_aggiornati = set()
     for sq in state["squadre"]:
         if sq.get("is_ghost"): continue
@@ -441,25 +479,64 @@ def trasferisci_al_ranking(state, podio):
     for pos, sq_id in podio:
         sq = get_squadra_by_id(state, sq_id)
         if not sq or sq.get("is_ghost"): continue
+        # Compagno di squadra per questo torneo
+        compagni = [get_atleta_by_id(state, aid) for aid in sq["atleti"]]
         for aid in sq["atleti"]:
             atleta = get_atleta_by_id(state, aid)
             if not atleta: continue
             s = atleta["stats"]
             s["tornei"] += 1
-            s["storico_posizioni"].append((nome_torneo, pos, n_squadre))
+            # Storico ricco: dict con tutti i metadati + compagni
+            comp_nomi = [c["nome"] for c in compagni if c and c["id"] != aid]
+            entry_storico = {
+                "nome":       nome_torneo,
+                "pos":        pos,
+                "n_squadre":  n_squadre,
+                "luogo":      meta_torneo["luogo"],
+                "data":       meta_torneo["data"],
+                "formato_set":meta_torneo["formato_set"],
+                "tipo":       meta_torneo["tipo"],
+                "tipo_gioco": meta_torneo["tipo_gioco"],
+                "num_campi":  meta_torneo["num_campi"],
+                "punteggio_max": meta_torneo["punteggio_max"],
+                "compagni":   comp_nomi,
+                "set_vinti":  sq.get("set_vinti", 0),
+                "set_persi":  sq.get("set_persi", 0),
+                "punti_fatti":sq.get("punti_fatti", 0),
+                "punti_subiti":sq.get("punti_subiti", 0),
+            }
+            s["storico_posizioni"].append(entry_storico)
             if pos == 1: s["vittorie"] += 1
             else: s["sconfitte"] += 1
             _aggiorna_attributi_fifa(atleta, pos)
     podio_atleti = {aid for _, sq_id in podio for aid in (get_squadra_by_id(state, sq_id) or {"atleti":[]})["atleti"]}
     for sq in state["squadre"]:
         if sq.get("is_ghost"): continue
+        comp_nomi_sq = [get_atleta_by_id(state, a)["nome"] for a in sq["atleti"] if get_atleta_by_id(state, a)]
         for aid in sq["atleti"]:
             if aid not in podio_atleti:
                 atleta = get_atleta_by_id(state, aid)
                 if atleta:
+                    comp_nomi = [c for c in comp_nomi_sq if c != atleta["nome"]]
                     atleta["stats"]["tornei"] += 1
                     atleta["stats"]["sconfitte"] += 1
-                    atleta["stats"]["storico_posizioni"].append((nome_torneo, n_squadre // 2, n_squadre))
+                    atleta["stats"]["storico_posizioni"].append({
+                        "nome":       nome_torneo,
+                        "pos":        n_squadre // 2,
+                        "n_squadre":  n_squadre,
+                        "luogo":      meta_torneo["luogo"],
+                        "data":       meta_torneo["data"],
+                        "formato_set":meta_torneo["formato_set"],
+                        "tipo":       meta_torneo["tipo"],
+                        "tipo_gioco": meta_torneo["tipo_gioco"],
+                        "num_campi":  meta_torneo["num_campi"],
+                        "punteggio_max": meta_torneo["punteggio_max"],
+                        "compagni":   comp_nomi,
+                        "set_vinti":  sq.get("set_vinti", 0),
+                        "set_persi":  sq.get("set_persi", 0),
+                        "punti_fatti":sq.get("punti_fatti", 0),
+                        "punti_subiti":sq.get("punti_subiti", 0),
+                    })
 
 def _aggiorna_attributi_fifa(atleta, posizione):
     s = atleta["stats"]
@@ -526,7 +603,7 @@ TROFEI_DEFINIZIONE = [
         "descrizione": "Conquista 1 podio (top 3)", "colore": "#cd7f32",
         "sfondo": "linear-gradient(135deg,#8b4513,#cd7f32)",
         "rarità": "non comune",
-        "check": lambda s: any(pos <= 3 for _, pos, *_ in s.get("storico_posizioni", []))
+        "check": lambda s: any(_parse_storico_entry(e)["pos"] <= 3 for e in s.get("storico_posizioni", []))
     },
     {
         "id": "esperto", "nome": "Esperto", "icona": "🎖️",
@@ -561,7 +638,7 @@ TROFEI_DEFINIZIONE = [
         "descrizione": "Conquista 20 medaglie totali", "colore": "#00f5ff",
         "sfondo": "linear-gradient(135deg,#003366,#00c8ff,#003366)",
         "rarità": "leggendario",
-        "check": lambda s: sum(1 for _, pos, *_ in s.get("storico_posizioni", []) if pos <= 3) >= 20
+        "check": lambda s: sum(1 for e in s.get("storico_posizioni", []) if _parse_storico_entry(e)["pos"] <= 3) >= 20
     },
     {
         "id": "iron_man", "nome": "Iron Man", "icona": "💪",
