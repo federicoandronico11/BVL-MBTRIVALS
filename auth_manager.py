@@ -42,7 +42,8 @@ def _load_users() -> dict:
         sheet = _get_gsheet()
         if sheet is not None:
             store = _sheet_read_all(sheet)
-            val = store.get("users_db")
+            from data_manager import _sheet_read_chunked
+            val = _sheet_read_chunked(store, "users_db")
             if val:
                 return json.loads(val)
     except Exception:
