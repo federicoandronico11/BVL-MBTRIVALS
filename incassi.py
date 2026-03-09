@@ -1,6 +1,5 @@
 """
 incassi.py — Gestione incassi torneo + PDF grafici
-Salvataggio su Google Sheets (colonna B) invece di file JSON locale.
 """
 import streamlit as st
 import json
@@ -11,35 +10,23 @@ INCASSI_FILE = "beach_volley_incassi.json"
 
 
 def load_incassi():
-    # 1. Prova Google Sheets (colonna B)
-    sheet = _get_gsheet()
-    if sheet is not None:
-        try:
-            val = sheet.cell(2, 2).value
-            if val:
-                return json.loads(val)
-        except Exception:
-            pass
-
-    # 2. Fallback: file locale
-    if Path(INCASSI_FILE).exists():
-        with open(INCASSI_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+    """Carica incassi da file locale JSON."""
+    try:
+        if Path(INCASSI_FILE).exists():
+            with open(INCASSI_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
     return {"tornei": {}}
 
 def save_incassi(data):
-    # 1. Salva su Google Sheets (colonna B)
-    sheet = _get_gsheet()
-    if sheet is not None:
-        try:
-            sheet.update("B1", [["incassi"], [json.dumps(data, ensure_ascii=False)]])
-            return
-        except Exception as e:
-            st.warning(f"⚠️ Errore salvataggio incassi su Sheets, salvo in locale. ({e})")
-
-    # 2. Fallback locale
-    with open(INCASSI_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Salva incassi su file locale JSON."""
+    try:
+        with open(INCASSI_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"Impossibile salvare incassi: {e}")
 
 
 def render_incassi(state):
