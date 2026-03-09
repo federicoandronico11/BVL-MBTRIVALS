@@ -137,10 +137,7 @@ _render_login()
 if "state" not in st.session_state:
     st.session_state.state = load_state()
 if "theme_cfg" not in st.session_state:
-    from theme_manager import _restore_theme_images
-    cfg = load_theme_config()
-    cfg = _restore_theme_images(cfg)
-    st.session_state.theme_cfg = cfg
+    st.session_state.theme_cfg = load_theme_config()
 if "current_page" not in st.session_state:
     st.session_state.current_page = "torneo"
 if "segnapunti_open" not in st.session_state:
@@ -577,7 +574,7 @@ with st.sidebar:
         if st.button("📅 Gestisci Tornei in Programma", use_container_width=True, key="btn_admin_tornei_prog"):
             st.session_state.current_page = "admin_tornei_programmati"; st.session_state.segnapunti_open = False; st.rerun()
 
-        if st.button("🔧 Ricalcola Statistiche Atleti", use_container_width=True, key="btn_ricalcola_stats"):
+        if st.button("🔧 Ricalcola Statistiche", use_container_width=True, key="btn_ricalcola"):
             st.session_state.current_page = "ricalcola_stats"; st.session_state.segnapunti_open = False; st.rerun()
 
         if st.button("⚡ MBT RIVALS — Card Game", use_container_width=True, key="btn_rivals"):
@@ -778,27 +775,18 @@ if st.session_state.get("show_bracket_overlay"):
     st.markdown("---")
 
 if st.session_state.segnapunti_open:
-    if is_admin or is_atleta:
-        # Admin e Atleta vedono il segnapunti live
-        from segnapunti_live import render_segnapunti_live
-        st.markdown("""
-        <div style="background:linear-gradient(90deg,rgba(232,0,45,0.1),transparent,rgba(232,0,45,0.1));
-            border:1px solid var(--accent1);border-radius:8px;padding:8px 20px;margin-bottom:16px;text-align:center">
-            <span style="font-family:var(--font-display);font-size:0.65rem;letter-spacing:4px;text-transform:uppercase;color:var(--accent1);font-weight:700">
-                🔴 LIVE · SEGNAPUNTI ATTIVO
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
-        render_segnapunti_live(state, theme_cfg)
-        st.divider()
-        st.stop()
-    else:
-        # Ospite vede la pagina live torneo
-        render_header()
-        from live_ospite import render_live_ospite
-        render_live_ospite(state)
-        render_bottom_nav()
-        st.stop()
+    from segnapunti_live import render_segnapunti_live
+    st.markdown("""
+    <div style="background:linear-gradient(90deg,rgba(232,0,45,0.1),transparent,rgba(232,0,45,0.1));
+        border:1px solid var(--accent1);border-radius:8px;padding:8px 20px;margin-bottom:16px;text-align:center">
+        <span style="font-family:var(--font-display);font-size:0.65rem;letter-spacing:4px;text-transform:uppercase;color:var(--accent1);font-weight:700">
+            🔴 LIVE · SEGNAPUNTI ATTIVO
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+    render_segnapunti_live(state, theme_cfg)
+    st.divider()
+    st.stop()
 
 # ── Pagine visibili a tutti ──────────────────────────────────────────────────
 
@@ -808,50 +796,8 @@ if page == "torneo":
     from fase_proclamazione import render_proclamazione
     render_header()
     fase = state["fase"]
-
-    # ── Pulsante AZZERA TORNEO (solo admin, solo fasi attive) ────────────────
-    if is_admin and fase in ("gironi", "eliminazione", "proclamazione"):
-        nome_t = state["torneo"].get("nome", "il torneo")
-        with st.expander("⚠️ Azzera Torneo", expanded=False):
-            st.warning(
-                f"Questa operazione cancella **tutti i risultati e i progressi** di "
-                f"**{nome_t}** e riporta il torneo alla fase di Setup iniziale, "
-                f"mantenendo squadre e atleti."
-            )
-            conferma = st.checkbox("Confermo — voglio azzerare tutti i risultati", key="conferma_reset_torneo")
-            if conferma:
-                if st.button("🔄 AZZERA TORNEO", type="primary", use_container_width=True, key="btn_reset_torneo"):
-                    from data_manager import genera_gironi, calcola_schedule
-                    for sq in state["squadre"]:
-                        sq["punti_classifica"] = 0
-                        sq["set_vinti"]        = 0
-                        sq["set_persi"]        = 0
-                        sq["punti_fatti"]      = 0
-                        sq["punti_subiti"]     = 0
-                        sq["vittorie"]         = 0
-                        sq["sconfitte"]        = 0
-                    ids        = [s["id"] for s in state["squadre"]]
-                    num_gironi = state["torneo"].get("num_gironi", 2)
-                    modalita   = state["torneo"].get("modalita", "Gironi + Playoff")
-                    if modalita == "Girone Unico":
-                        num_gironi = 1
-                    use_ranking = state["torneo"].get("usa_ranking_teste_serie", False)
-                    state["gironi"]        = genera_gironi(ids, num_gironi, use_ranking=use_ranking, state=state)
-                    state["bracket"]       = []
-                    state["bracket_extra"] = []
-                    state["vincitore"]     = None
-                    state["podio"]         = []
-                    state["fase"]          = "gironi"
-                    calcola_schedule(state)
-                    save_state(state)
-                    st.success(f"✅ Torneo **{nome_t}** azzerato. Gironi rigenerati!")
-                    st.rerun()
-
     if fase == "setup":
         if is_admin:
-            nome_avviato = st.session_state.pop("torneo_avviato_da", None)
-            if nome_avviato:
-                st.success(f"🚀 **{nome_avviato}** caricato nel Setup! Puoi fare ulteriori modifiche prima di avviare il torneo.")
             from fase_setup import render_setup
             render_setup(state)
         else:
@@ -955,47 +901,45 @@ elif page == "incassi":
         render_header()
         st.error("🔒 Sezione riservata agli amministratori.")
 
-elif page == "ricalcola_stats":
-    if is_admin:
-        render_header()
-        st.markdown("## 🔧 Ricalcolo Statistiche Atleti")
-        st.info(
-            "Questa operazione **azzera e ricalcola da zero** tutti gli attributi FIFA "
-            "e le statistiche di ogni atleta, partendo dallo storico tornei gia salvato. "
-            "Usa questo strumento per correggere dati di tornei gia conclusi."
-        )
-        atleti_con_storico = [a for a in state.get("atleti", []) if a["stats"].get("storico_posizioni")]
-        if not atleti_con_storico:
-            st.warning("Nessun atleta ha storico tornei salvato.")
-        else:
-            st.markdown(f"**{len(atleti_con_storico)} atleti** con storico torneo trovati.")
-            with st.expander("Anteprima storico salvato", expanded=False):
-                for a in atleti_con_storico[:10]:
-                    st.markdown(f"**{a['nome']}** — {len(a['stats']['storico_posizioni'])} torneo/i")
-                    for e in a["stats"]["storico_posizioni"]:
-                        from data_manager import _parse_storico_entry
-                        en = _parse_storico_entry(e)
-                        st.caption(f"  pos {en['pos']} / {en['n_squadre']} sq — "
-                                   f"set {en.get('set_vinti',0)}V/{en.get('set_persi',0)}P — "
-                                   f"punti {en.get('punti_fatti',0)}-{en.get('punti_subiti',0)}")
-                if len(atleti_con_storico) > 10:
-                    st.caption(f"... e altri {len(atleti_con_storico)-10} atleti")
-            conferma_r = st.checkbox("Confermo — voglio ricalcolare tutte le statistiche", key="conf_ricalcola")
-            if conferma_r:
-                if st.button("RICALCOLA ORA", type="primary", use_container_width=True, key="btn_ricalcola"):
-                    from data_manager import ricalcola_stats_da_storico
-                    ricalcola_stats_da_storico(state)
-                    save_state(state)
-                    st.success("Statistiche ricalcolate per tutti gli atleti!")
-                    st.rerun()
-    else:
-        render_header()
-        st.error("Sezione riservata agli amministratori.")
-
 elif page == "theme":
     if is_admin:
         render_personalization_page(theme_cfg)
         st.session_state.theme_cfg = theme_cfg
+    else:
+        render_header()
+        st.error("🔒 Sezione riservata agli amministratori.")
+
+elif page == "ricalcola_stats":
+    if is_admin:
+        render_header()
+        st.markdown("## 🔧 Ricalcolo Statistiche Atleti")
+        st.info("Azzera e ricalcola da zero attributi FIFA e statistiche di ogni atleta dallo storico tornei salvato. Usa questo per correggere dati di tornei già conclusi.")
+        atleti_con_storico = [a for a in state.get("atleti",[]) if a["stats"].get("storico_posizioni")]
+        if not atleti_con_storico:
+            st.warning("Nessun atleta ha storico tornei. Completa prima un torneo.")
+        else:
+            st.markdown(f"**{len(atleti_con_storico)} atleti** con storico torneo trovati.")
+            with st.expander("👁 Anteprima storico", expanded=False):
+                for a in atleti_con_storico[:8]:
+                    storico = a["stats"]["storico_posizioni"]
+                    st.markdown(f"**{a['nome']}** — {len(storico)} torneo/i")
+                    for e in storico:
+                        if isinstance(e, dict):
+                            st.caption(f"  → pos {e.get('pos','?')}/{e.get('n_squadre','?')} | set {e.get('set_vinti',0)}V-{e.get('set_persi',0)}P | punti {e.get('punti_fatti',0)}-{e.get('punti_subiti',0)}")
+                        else:
+                            pos = e[1] if len(e)>1 else "?"
+                            nsq = e[2] if len(e)>2 else "?"
+                            st.caption(f"  → pos {pos}/{nsq}")
+                if len(atleti_con_storico) > 8:
+                    st.caption(f"… e altri {len(atleti_con_storico)-8} atleti")
+            conf = st.checkbox("Confermo — ricalcola tutto da zero", key="conf_ricalcola_v2")
+            if conf:
+                if st.button("🔄 RICALCOLA ORA", type="primary", use_container_width=True, key="btn_ricalcola_exec"):
+                    from data_manager import ricalcola_stats_da_storico
+                    ricalcola_stats_da_storico(state)
+                    save_state(state)
+                    st.success(f"✅ Statistiche ricalcolate per {len(atleti_con_storico)} atleti!")
+                    st.rerun()
     else:
         render_header()
         st.error("🔒 Sezione riservata agli amministratori.")
